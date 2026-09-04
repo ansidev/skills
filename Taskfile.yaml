@@ -1,0 +1,199 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: '3'
+
+vars:
+  # Internal constant - used when resolving empty agents
+  DEFAULT_AGENTS: pi,opencode,codex,claude-code,github-copilot,kiro-cli
+  SKILL_DIRS:
+    map:
+      claude-code: "$HOME/.claude/skills"
+      codex: "$HOME/.codex/skills"
+      github-copilot: "$HOME/.copilot/skills"
+      kiro-cli: "$HOME/.kiro/skills"
+      opencode: "$HOME/.config/opencode/skills"
+      pi: "$HOME/.pi/agent/skills"
+  SKILLS_METADATA:
+    - repo: ansidev/kiro
+      skills:
+        - '*'
+    - repo: ansidev/prompt-master
+      skills:
+        - '*'
+    - repo: anthropics/skills
+      skills:
+        - 'skill-creator'
+    - repo: blader/humanizer
+      skills:
+        - 'humanizer'
+    - repo: DietrichGebert/ponytail
+      skills:
+        - 'ponytail'
+    - repo: herdrdev/herdr
+      skills:
+        - 'herdr'
+    - repo: inkeep/open-knowledge-skills
+      skills:
+        - '*'
+    - repo: krzysztofdudek/ResearcherSkill
+      skills:
+        - 'researcher'
+    - repo: kunchenguid/gh-axi
+      skills:
+        - 'gh-axi'
+    - repo: manaflow-ai/cmux
+      skills:
+        - '*'
+    - repo: obra/superpowers
+      skills:
+        - '*'
+    - repo: smyrick/skills
+      skills:
+        - 'codebase-summary'
+
+tasks:
+  prepare:
+    desc: Install the GitHub CLI (gh) via Homebrew when missing.
+    cmds:
+      - cmd: |
+          if ! command -v brew >/dev/null 2>&1; then
+            echo "prepare: skipped (Homebrew not found)."
+            exit 0
+          fi
+          brew trust /opt/homebrew
+          if [ $? -ne 0 ]; then
+            echo "Error: brew trust failed." >&2
+            exit 1
+          fi
+          if ! command -v gh >/dev/null 2>&1; then
+            brew install gh
+            if [ $? -ne 0 ]; then
+              echo "Error: brew install gh failed." >&2
+              exit 1
+            fi
+          fi
+          echo "Done preparation."
+    silent: true
+
+  install:
+    desc: Install all agent skills from skills.txt
+    cmds:
+      - for:
+          var: SKILLS_METADATA
+        task: install-skills-from-repo
+        vars:
+          REPO: '{{.ITEM.repo}}'
+          SKILLS: '{{join "," .ITEM.skills}}'
+          AGENTS: '{{.DEFAULT_AGENTS}}'
+      - echo "All skills installed successfully."
+
+  install-parallel:
+    desc: Install all agent skills from skills.txt in parallel
+    deps:
+      - for:
+          var: SKILLS_METADATA
+        task: install-skills-from-repo
+        vars:
+          REPO: '{{.ITEM.repo}}'
+          SKILLS: '{{join "," .ITEM.skills}}'
+          AGENTS: '{{.DEFAULT_AGENTS}}'
+    cmds:
+      - echo "All skills installed successfully."
+
+  install-skills-from-repo:
+    desc: Install the agent skills from GitHub repository.
+    # Inputs: REPO, SKILLS, AGENTS
+    cmds:
+      - if: '{{eq .SKILLS "*"}}'
+        task: install-all-skills-from-repo
+        vars:
+          REPO: '{{.REPO}}'
+          SKILLS: '*'
+          AGENTS: '{{.AGENTS}}'
+      - if: '{{ne .SKILLS "*"}}'
+        task: install-selected-skills-from-repo
+        vars:
+          REPO: '{{.REPO}}'
+          SKILLS: '{{.SKILLS}}'
+          AGENTS: '{{.AGENTS}}'
+
+  install-all-skills-from-repo:
+    desc: Install all skills from the specified GitHub repository.
+    vars:
+      AGENTS: '{{default .DEFAULT_AGENTS .AGENTS}}'
+    cmds:
+      - gh skill install "{{.REPO}}" --all --upstream --force --scope "user" --agent universal
+      - task: link-repo-skills-to-many-agents
+        vars:
+          REPO: '{{.REPO}}'
+          AGENTS: '{{.AGENTS}}'
+
+  install-selected-skills-from-repo:
+    desc: Install selected skills from the specified GitHub repository.
+    # Inputs: REPO, SKILLS, AGENTS
+    vars:
+      AGENTS: '{{default .DEFAULT_AGENTS .AGENTS}}'
+    cmds:
+      - for:
+          var: SKILLS
+          split: ','
+        task: install-one-skill-from-repo
+        vars:
+          REPO: '{{.REPO}}'
+          SKILL: '{{.ITEM}}'
+          AGENTS: '{{.AGENTS}}'
+
+  install-one-skill-from-repo:
+    desc: Install a single skill from the specified GitHub repository.
+    vars:
+      AGENTS: '{{default .DEFAULT_AGENTS .AGENTS}}'
+    cmds:
+      - gh skill install "{{.REPO}}" "{{.SKILL}}" --upstream --force --scope "user" --agent universal
+      - task: link-one-skill-to-many-agents
+        vars:
+          SKILL: '{{.SKILL}}'
+          AGENTS: '{{.AGENTS}}'
+
+  link-repo-skills-to-many-agents:
+    desc: Create symbolic link from the universal agent skills of a repository to the respective agent-specific skill directories.
+    # Inputs: REPO, AGENTS
+    vars:
+      SKILLS:
+        sh: |
+          gh skill list \
+            --scope user \
+            --agent universal \
+            --json skillName,sourceURL \
+            --jq '.[] | select(.sourceURL | contains("{{.REPO}}")) | .skillName' |
+            sed 's|^[^/]*/||'
+      AGENTS: '{{default .DEFAULT_AGENTS .AGENTS}}'
+    cmds:
+      - for:
+          var: SKILLS
+        task: link-one-skill-to-many-agents
+        vars:
+          SKILL: '{{.ITEM}}'
+          AGENTS: '{{.AGENTS}}'
+
+  link-one-skill-to-many-agents:
+    desc: Install the skill to the list of agent-specific skill directories using a symbolic link.
+    vars:
+      AGENTS: '{{default .DEFAULT_AGENTS .AGENTS}}'
+    cmds:
+      - for:
+          var: AGENTS
+          split: ','
+        task: link-one-skill-to-one-agent
+        vars:
+          SKILL: '{{.SKILL}}'
+          AGENT: '{{.ITEM}}'
+
+  link-one-skill-to-one-agent:
+    desc: Install the skill to the agent-specific skill directory using a symbolic link.
+    vars:
+      SKILL_DIR: '{{dig .AGENT "" .SKILL_DIRS}}'
+    cmds:
+      - cmd: echo "Removing exiting skill directory {{.SKILL_DIR}}/{{.SKILL}}" && rm -rf "{{.SKILL_DIR}}/{{.SKILL}}"
+        if: '[ -d "{{.SKILL_DIR}}/{{.SKILL}}" ]'
+      - echo "Linking universal skill {{.SKILL}} to {{.AGENT}} skill directory {{.SKILL_DIR}}..."
+      - ln -sf "$HOME/.agents/skills/{{.SKILL}}" "{{.SKILL_DIR}}"
