@@ -78,6 +78,7 @@ tasks:
   install:
     desc: Install all agent skills from skills.txt
     cmds:
+      - task: install-all-local-skills
       - for:
           var: SKILLS_METADATA
         task: install-skills-from-repo
@@ -90,6 +91,7 @@ tasks:
   install-parallel:
     desc: Install all agent skills from skills.txt in parallel
     deps:
+      - task: install-all-local-skills
       - for:
           var: SKILLS_METADATA
         task: install-skills-from-repo
@@ -122,7 +124,7 @@ tasks:
     vars:
       AGENTS: '{{default .DEFAULT_AGENTS .AGENTS}}'
     cmds:
-      - gh skill install "{{.REPO}}" --all --upstream --force --scope "user" --agent universal
+      - gh skill install "{{.REPO}}" --all --scope "user" --agent universal --upstream --force
       - task: link-repo-skills-to-many-agents
         vars:
           REPO: '{{.REPO}}'
@@ -143,12 +145,24 @@ tasks:
           SKILL: '{{.ITEM}}'
           AGENTS: '{{.AGENTS}}'
 
+  install-all-local-skills:
+    desc: Install all agent skills from this repository.
+    vars:
+      AGENTS: '{{default .DEFAULT_AGENTS .AGENTS}}'
+    cmds:
+      - gh skill install . --all --from-local --scope "user" --agent universal --force
+      - task: link-repo-skills-to-many-agents
+        vars:
+          REPO:
+            sh: echo $PWD
+          AGENTS: '{{.AGENTS}}'
+
   install-one-skill-from-repo:
     desc: Install a single skill from the specified GitHub repository.
     vars:
       AGENTS: '{{default .DEFAULT_AGENTS .AGENTS}}'
     cmds:
-      - gh skill install "{{.REPO}}" "{{.SKILL}}" --upstream --force --scope "user" --agent universal
+      - gh skill install "{{.REPO}}" "{{.SKILL}}" --scope "user" --agent universal --upstream --force
       - task: link-one-skill-to-many-agents
         vars:
           SKILL: '{{.SKILL}}'
