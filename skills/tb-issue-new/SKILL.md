@@ -1,6 +1,7 @@
 ---
 name: tb-issue-new
 description: Use this skill whenever the user wants to create a new issue in Taskboard. This includes requests to "file a bug", "create a ticket", "log an issue", or any mention of tracking a new task or bug in Taskboard.
+license: MIT
 ---
 
 # Taskboard Issue Creation

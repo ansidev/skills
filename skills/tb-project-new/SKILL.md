@@ -1,6 +1,7 @@
 ---
 name: tb-project-new
 description: Use this skill whenever the user wants to create a new project in Taskboard.
+license: MIT
 ---
 
 # Taskboard Project Creation

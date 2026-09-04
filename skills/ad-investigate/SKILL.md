@@ -1,6 +1,7 @@
 ---
 name: ad-investigate
 description: Use when investigating an issue
+license: MIT
 ---
 
 # Issue Investigation

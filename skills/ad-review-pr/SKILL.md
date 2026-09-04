@@ -1,6 +1,7 @@
 ---
 name: ad-review-pr
 description: Use when reviewing a pull request for correctness, completeness, and quality.
+license: MIT
 ---
 
 # ad-review-pr

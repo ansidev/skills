@@ -19,7 +19,7 @@
 ## agents — comma-delimited list of agent names to install skills to
 agents ?= pi,opencode,codex,claude-code,github-copilot,kiro-cli
 
-## scope  — gh extension install scope; must be 'user' or 'project'
+## scope  — gh skill install scope; must be 'user' or 'project'
 scope ?= user
 
 ## debug  — print expanded commands instead of executing them; 'true' or 'false'
@@ -189,7 +189,7 @@ install:
 	      IFS=','; \
 	      continue; \
 	    fi; \
-	    gh_cmd="gh skill install \"$$repo_val\" --upstream --force --scope \"$$scope_val\" --agent universal"; \
+	    gh_cmd="gh skill install \"$$repo_val\" \"$$skill\" --upstream --force --scope \"$$scope_val\" --agent universal"; \
 	    if [ "$$debug_resolved" = "true" ]; then \
 	      echo "$$gh_cmd"; \
 	    else \
@@ -215,7 +215,7 @@ install:
 	          fi; \
 	        fi; \
 	      else \
-	        ln_cmd="ln -sf ~/.agents/skills/$$skill \"$$skill_dir\""; \
+	        ln_cmd="ln -sf $$HOME/.agents/skills/$$skill \"$$skill_dir\""; \
 	        if [ "$$debug_resolved" = "true" ]; then \
 	          echo "$$ln_cmd"; \
 	        else \

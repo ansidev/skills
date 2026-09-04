@@ -1,6 +1,7 @@
 ---
 name: tb-issue-start
 description: Use this skill to start working on the solution for the relevant taskboard issue. When the user asks to fix, correct, or start an issue in the taskboard, this skill will be activated.
+license: MIT
 ---
 
 # tb-issue-start

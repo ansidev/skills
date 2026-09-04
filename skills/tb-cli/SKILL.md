@@ -1,6 +1,7 @@
 ---
 name: tb-cli
 description: Use this skill to query information about taskboard's team, project, ticket if the information is not available via MCP.
+license: MIT
 ---
 
 # tb-cli

@@ -1,6 +1,7 @@
 ---
 name: add-knowledge
 description: Add knowledge to OpenKnowledge base. Use this skill to add new knowledge or update existing knowledge in the OpenKnowledge base.
+license: MIT
 ---
 
 # add-knowledge

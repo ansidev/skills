@@ -1,6 +1,7 @@
 ---
 name: ad-implement
 description: Use to implement a fix for a known issue, or to implement a new feature.
+license: MIT
 ---
 
 ## Input
