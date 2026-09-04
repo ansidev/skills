@@ -1,3 +1,8 @@
+# Test temp artefacts
+tests/tmp/
+tests/stubs/*.log
+
+# Public agent skills, will be installed by the script
 ai-prompting/
 aside-browser/
 brainstorming/
@@ -34,3 +39,6 @@ using-superpowers/
 verification-before-completion/
 writing-plans/
 writing-skills/
+
+# Others
+.history/

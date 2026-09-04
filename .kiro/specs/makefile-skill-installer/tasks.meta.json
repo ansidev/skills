@@ -1,0 +1,172 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1. Bootstrap project layout and test infrastructure": [
+      {
+        "executionId": "67ea8663-e093-4c17-aeef-0aade1248194",
+        "chatSessionId": "sess_7c3510e8-7faa-4ed7-863a-4fccc1db906a",
+        "timestamp": 1788525616282
+      },
+      {
+        "executionId": "67ea8663-e093-4c17-aeef-0aade1248194",
+        "chatSessionId": "sess_7c3510e8-7faa-4ed7-863a-4fccc1db906a",
+        "timestamp": 1788525627925
+      },
+      {
+        "executionId": "67ea8663-e093-4c17-aeef-0aade1248194",
+        "chatSessionId": "sess_7c3510e8-7faa-4ed7-863a-4fccc1db906a",
+        "timestamp": 1788525776710
+      }
+    ],
+    "2.1 Write global variable declarations and `help` target": [
+      {
+        "executionId": "67ea8663-e093-4c17-aeef-0aade1248194",
+        "chatSessionId": "sess_7c3510e8-7faa-4ed7-863a-4fccc1db906a",
+        "timestamp": 1788525616283
+      },
+      {
+        "executionId": "67ea8663-e093-4c17-aeef-0aade1248194",
+        "chatSessionId": "sess_7c3510e8-7faa-4ed7-863a-4fccc1db906a",
+        "timestamp": 1788525628593
+      },
+      {
+        "executionId": "67ea8663-e093-4c17-aeef-0aade1248194",
+        "chatSessionId": "sess_7c3510e8-7faa-4ed7-863a-4fccc1db906a",
+        "timestamp": 1788525777655
+      }
+    ],
+    "3.1 Add the agent directory `case` block inside the `install` recipe": [
+      {
+        "executionId": "67ea8663-e093-4c17-aeef-0aade1248194",
+        "chatSessionId": "sess_7c3510e8-7faa-4ed7-863a-4fccc1db906a",
+        "timestamp": 1788525616283
+      },
+      {
+        "executionId": "67ea8663-e093-4c17-aeef-0aade1248194",
+        "chatSessionId": "sess_7c3510e8-7faa-4ed7-863a-4fccc1db906a",
+        "timestamp": 1788525791065
+      },
+      {
+        "executionId": "67ea8663-e093-4c17-aeef-0aade1248194",
+        "chatSessionId": "sess_7c3510e8-7faa-4ed7-863a-4fccc1db906a",
+        "timestamp": 1788525884448
+      }
+    ],
+    "4.1 Write the `prepare` recipe": [
+      {
+        "executionId": "67ea8663-e093-4c17-aeef-0aade1248194",
+        "chatSessionId": "sess_7c3510e8-7faa-4ed7-863a-4fccc1db906a",
+        "timestamp": 1788525616284
+      },
+      {
+        "executionId": "67ea8663-e093-4c17-aeef-0aade1248194",
+        "chatSessionId": "sess_7c3510e8-7faa-4ed7-863a-4fccc1db906a",
+        "timestamp": 1788525938124
+      },
+      {
+        "executionId": "67ea8663-e093-4c17-aeef-0aade1248194",
+        "chatSessionId": "sess_7c3510e8-7faa-4ed7-863a-4fccc1db906a",
+        "timestamp": 1788526097051
+      }
+    ],
+    "5.1 Write the `install` recipe preamble: validation and default resolution": [
+      {
+        "executionId": "67ea8663-e093-4c17-aeef-0aade1248194",
+        "chatSessionId": "sess_7c3510e8-7faa-4ed7-863a-4fccc1db906a",
+        "timestamp": 1788525616285
+      },
+      {
+        "executionId": "67ea8663-e093-4c17-aeef-0aade1248194",
+        "chatSessionId": "sess_7c3510e8-7faa-4ed7-863a-4fccc1db906a",
+        "timestamp": 1788526107812
+      },
+      {
+        "executionId": "67ea8663-e093-4c17-aeef-0aade1248194",
+        "chatSessionId": "sess_7c3510e8-7faa-4ed7-863a-4fccc1db906a",
+        "timestamp": 1788526292995
+      }
+    ],
+    "6.1 Write the `agent_arr` construction shell block": [
+      {
+        "executionId": "67ea8663-e093-4c17-aeef-0aade1248194",
+        "chatSessionId": "sess_7c3510e8-7faa-4ed7-863a-4fccc1db906a",
+        "timestamp": 1788525616286
+      },
+      {
+        "executionId": "67ea8663-e093-4c17-aeef-0aade1248194",
+        "chatSessionId": "sess_7c3510e8-7faa-4ed7-863a-4fccc1db906a",
+        "timestamp": 1788526302769
+      }
+    ],
+    "7.1 Write the `skills == \"*\"` branch of the `install` recipe": [
+      {
+        "executionId": "67ea8663-e093-4c17-aeef-0aade1248194",
+        "chatSessionId": "sess_7c3510e8-7faa-4ed7-863a-4fccc1db906a",
+        "timestamp": 1788525616287
+      }
+    ],
+    "8.1 Write the named-skill loop in the `install` recipe": [
+      {
+        "executionId": "67ea8663-e093-4c17-aeef-0aade1248194",
+        "chatSessionId": "sess_7c3510e8-7faa-4ed7-863a-4fccc1db906a",
+        "timestamp": 1788525616288
+      }
+    ],
+    "9. Checkpoint — verify core install behavior": [
+      {
+        "executionId": "67ea8663-e093-4c17-aeef-0aade1248194",
+        "chatSessionId": "sess_7c3510e8-7faa-4ed7-863a-4fccc1db906a",
+        "timestamp": 1788525616289
+      }
+    ],
+    "10.1 Write the `install-all` recipe": [
+      {
+        "executionId": "67ea8663-e093-4c17-aeef-0aade1248194",
+        "chatSessionId": "sess_7c3510e8-7faa-4ed7-863a-4fccc1db906a",
+        "timestamp": 1788525616290
+      }
+    ],
+    "11. Final checkpoint — full test suite": [
+      {
+        "executionId": "67ea8663-e093-4c17-aeef-0aade1248194",
+        "chatSessionId": "sess_7c3510e8-7faa-4ed7-863a-4fccc1db906a",
+        "timestamp": 1788525616290
+      }
+    ],
+    "2. Implement the `help` target and global variable block": [
+      {
+        "executionId": "67ea8663-e093-4c17-aeef-0aade1248194",
+        "chatSessionId": "sess_7c3510e8-7faa-4ed7-863a-4fccc1db906a",
+        "timestamp": 1788525777657
+      }
+    ],
+    "3. Implement the `global_agent_skill_dir_map` shell `case` statement helper": [
+      {
+        "executionId": "67ea8663-e093-4c17-aeef-0aade1248194",
+        "chatSessionId": "sess_7c3510e8-7faa-4ed7-863a-4fccc1db906a",
+        "timestamp": 1788525884449
+      }
+    ],
+    "4. Implement the `prepare` target": [
+      {
+        "executionId": "67ea8663-e093-4c17-aeef-0aade1248194",
+        "chatSessionId": "sess_7c3510e8-7faa-4ed7-863a-4fccc1db906a",
+        "timestamp": 1788526097052
+      }
+    ],
+    "5. Implement `install` — input validation and default resolution": [
+      {
+        "executionId": "67ea8663-e093-4c17-aeef-0aade1248194",
+        "chatSessionId": "sess_7c3510e8-7faa-4ed7-863a-4fccc1db906a",
+        "timestamp": 1788526292996
+      }
+    ],
+    "6. Implement `install` — agent array resolution": [
+      {
+        "executionId": "67ea8663-e093-4c17-aeef-0aade1248194",
+        "chatSessionId": "sess_7c3510e8-7faa-4ed7-863a-4fccc1db906a",
+        "timestamp": 1788526302771
+      }
+    ]
+  }
+}
