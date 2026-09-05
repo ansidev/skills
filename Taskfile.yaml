@@ -12,6 +12,7 @@ vars:
     - github-copilot
     - kiro-cli
   AGENTS: '{{.AGENTS | default (.DEFAULT_AGENTS | join ",") }}'
+  # See https://github.com/vercel-labs/skills#supported-agents
   SKILL_DIRS:
     map:
       claude-code: "$HOME/.claude/skills"
