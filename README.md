@@ -1,6 +1,6 @@
-# skills
+# ansidev's skills
 
-Agent skills used by ansidev
+Agent skills used by ansidev.
 
 ## Install
 
@@ -15,6 +15,13 @@ or
 ```shellscript
 task -s install
 ```
+
+For more detailed information, please run `task -l` for available commands.
+
+The script uses `gh skill install` to install agent skills.
+
+For accepted agent values, please check [gh skill install](https://cli.github.com/manual/gh_skill_install).
+
 ## Contact
 
 Le Minh Tri [@ansidev](https://ansidev.xyz/about).
