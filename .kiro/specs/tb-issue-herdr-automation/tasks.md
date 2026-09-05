@@ -8,23 +8,23 @@ validate and close out. Each task maps to requirements in `requirements.md`.
 
 ## Tasks
 
-- [ ] 1. Update `skills/tb-issue-start/SKILL.md` with Herdr automation and completion rules
-  - [ ] 1.1 Add Herdr detection rule
+- [x] 1. Update `skills/tb-issue-start/SKILL.md` with Herdr automation and completion rules
+  - [x] 1.1 Add Herdr detection rule
     - Add a rule running `test "${HERDR_ENV:-}" = 1` before any herdr command; branch to the
       automation workflow only when it passes (Req 1.1–1.3)
     - _Requirements: 1.1, 1.2, 1.3, 6.1_
-  - [ ] 1.2 Add the Herdr automation workflow section
+  - [x] 1.2 Add the Herdr automation workflow section
     - Document the steps: resolve ticket (existing contract) → `herdr worktree create
       --branch <prefix> --label <prefix> --no-focus` → start `pi -a '/approval-mode act'`
       via `herdr agent start` in the worktree pane (syntax discovered via `herdr agent`) →
       deliver `/skill:tb-issue-start <prefix>` via `herdr agent prompt` → report IDs
     - Include the failure path: report and stop if worktree creation or agent start fails
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
-  - [ ] 1.3 Add "never auto-done" rule
+  - [x] 1.3 Add "never auto-done" rule
     - Explicit rule: the agent must not set the ticket status to `done` anywhere in this
       skill; closing is reserved for `tb-issue-finish` on explicit user invocation
     - _Requirements: 3.1, 3.2_
-  - [ ] 1.4 Add auto-staging rule
+  - [x] 1.4 Add auto-staging rule
     - Explicit rule: stage exactly the ticket-relevant files with `git add`; never commit
       or push; never stage unrelated files or scratch output
     - _Requirements: 4.1, 4.2, 4.3, 4.4_
