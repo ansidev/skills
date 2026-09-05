@@ -202,7 +202,6 @@ tasks:
       - task: link-one-skill-to-many-agents
         vars:
           SKILL: '{{.SKILL}}'
-          # AGENTS: '{{.AGENTS}}'
 
   link-repo-skills-to-many-agents:
     desc: |
