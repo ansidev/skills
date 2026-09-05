@@ -168,4 +168,3 @@ PATH-based command stubs) plus `task --dry` for Taskfile changes. Strategy:
    5. add-knowledge skill (kb-okf MCP)
    6. taskboard ticket status → done
 ```
-
