@@ -34,7 +34,24 @@ vars:
         - 'herdr'
     - repo: inkeep/open-knowledge-skills
       skills:
-        - '*'
+        - 'skills/core/open-knowledge-discovery'
+        - 'skills/core/open-knowledge'
+        - 'skills/core/open-knowledge-write-skill'
+        - 'skills/starter-packs/worldbuilding/worldbuilding'
+        - 'skills/starter-packs/personal-crm/personal-crm'
+        - 'skills/starter-packs/okf-knowledge-base/okf-knowledge-base'
+        - 'skills/starter-packs/codebase-wiki/codebase-wiki'
+        - 'skills/starter-packs/note-taking/note-taking'
+        - 'skills/starter-packs/writing-workflow/writing-workflow'
+        - 'skills/starter-packs/knowledge-base/research-with-sources'
+        - 'skills/starter-packs/knowledge-base/knowledge-base'
+        - 'skills/starter-packs/knowledge-base/consolidate-notes'
+        - 'skills/starter-packs/software-lifecycle/record-a-decision'
+        - 'skills/starter-packs/software-lifecycle/review-a-design'
+        - 'skills/starter-packs/software-lifecycle/frame-a-proposal'
+        - 'skills/starter-packs/software-lifecycle/write-a-spec'
+        - 'skills/starter-packs/software-lifecycle/write-a-postmortem'
+        - 'skills/starter-packs/software-lifecycle/software-lifecycle'
     - repo: krzysztofdudek/ResearcherSkill
       skills:
         - 'researcher'
