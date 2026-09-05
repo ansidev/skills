@@ -45,3 +45,4 @@ Use this skill ONLY when the user explicitly asks to finish a taskboard ticket, 
    3. Only touch workspaces/worktrees this workflow created; never remove ones you did not create.
 7. Add knowledge: use skill `add-knowledge` to record knowledge related to this ticket in the OpenKnowledge base (via the `kb-okf` MCP). Prefer updating an existing document; create a new one only when appropriate.
 8. Close the ticket: update the taskboard ticket status to `done` using `taskboard_update_ticket` (or the `taskboard` CLI via `tb-cli` if MCP is unavailable). This step must be last; if any earlier step failed, stop without changing the status and report the failure.
+9. Report to user what you have done as a checklist.

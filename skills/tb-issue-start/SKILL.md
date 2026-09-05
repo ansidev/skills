@@ -30,7 +30,7 @@ Use this skill when the user asks to fix, correct, or resolve an issue in the ta
 2. Use tool `taskboard_get_ticket` to retrieve the ticket details with id is the given/resolved ticket ID. If the ticket is not found, return a message indicating that the ticket does not exist.
 3. If the ticket status is todo, use tool `taskboard_update_ticket` to change the status to in_progress and team to agent. Otherwise, if the ticket status is in_progress, continue to the next step. If the ticket status is done, return a message indicating that the issue has already been resolved.
 4. If the Herdr check `test "${HERDR_ENV:-}" = 1` passes AND the user asked to start the ticket from inside Herdr, run the Herdr automation workflow below. Otherwise continue with step 5.
-5. Use skill `spec-driven-development` to create a solution for the issue.
+5. Important: MUST use skill `spec-driven-development` to create a solution for the issue.
 6. Important rule: The output of phase 1 of the `spec-driven-development` skill (`Requirements Gathering`) MUST be updated back to the taskboard ticket description.
 7. Additional steps as needed by the `spec-driven-development` skill to complete the solution.
 8. When the implementation finishes, apply Rules 3 and 4: do not move the ticket to `done`; stage exactly the ticket-relevant changes without committing.
@@ -46,13 +46,7 @@ Use this workflow to bootstrap the implementation environment automatically, rep
    ```
 
    Read the workspace ID and pane ID from the JSON result. On failure, report the error to the user and stop — do not start the agent.
-2. Start the pi coding agent in the worktree workspace's shell pane. Discover the exact syntax from the installed binary first (`herdr agent`), then run `herdr agent start` for the pane with command:
-
-   ```
-   pi -a '/approval-mode act'
-   ```
-
-   On failure, report the error and leave the workspace for manual inspection.
+2. Start the cline coding agent in the worktree workspace's shell pane. On failure, report the error and leave the workspace for manual inspection.
 3. Deliver the ticket prompt to the agent so it starts working in the new session:
 
    ```bash
