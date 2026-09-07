@@ -13,7 +13,7 @@ When the user asks to save, remember, document, or add knowledge to the second b
 ## Rules
 
 1. You MUST use the MCP called `kb-okf`.
-2. If tool calls require the working directory (usually `cwd` parameter), you MUST use the working directory from the respective MCP configuration key `cwd`. You may need to read MCP configurations from `~/.config/mcp/mcp.json`.
+2. The base knowledge base directory is `/Users/ansidev/projects/kb`, in case tool calls require the working directory (usually `cwd` parameter).
 
 ## Workflow
 

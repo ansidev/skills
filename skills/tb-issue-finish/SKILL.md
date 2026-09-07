@@ -20,17 +20,27 @@ Use this skill ONLY when the user explicitly asks to finish a taskboard ticket, 
 
 ## Input
 
-1. Input is the taskboard ticket ID or ticket prefix.
-2. If the input length is 26, it is considered a ticket ID. If the input length is shorter than 26, it is considered a ticket prefix.
+1. Input is the taskboard ticket ID or ticket prefix. These are two different strings with different lengths and MUST NOT be conflated:
+   - **Ticket prefix**: the project prefix, e.g. `KP` (the `projectPrefix` field on the ticket record). It is shared by every ticket of the project, so it alone never identifies a single ticket. It is for lookup/grouping only.
+   - **Ticket ID**: the per-ticket identifier in short form `<prefix>-<number>`, e.g. `KP-3` (this is what `taskboard ticket list` shows in brackets, e.g. `[KP-3]`). The taskboard MCP/CLI additionally expose an internal 26-character ULID (e.g. `01M1VSVYDCNW26SMBDRVN6AT5M`) for the same ticket.
+2. Recognise the input by its shape:
+   - Matches `^[A-Z]+-[0-9]+$` (e.g. `KP-3`): it is a ticket ID (short form) — NOT a prefix.
+   - Is a 26-character uppercase alphanumeric string (ULID): it is a ticket ID (internal form).
+   - Is a bare alphabetic string without a `-<number>` part (e.g. `KP`): it is a ticket prefix.
+3. If the input is a ticket prefix, do NOT treat it as a ticket ID. Run `taskboard ticket list | grep <prefix>` to list that project's tickets. If exactly one ticket matches, use it; if several match, ask the user which ticket number they mean. NEVER use the bare prefix as a ticket ID, worktree name, or branch name.
+4. `<ticket-id>` used throughout this skill is the ticket ID in short form `<prefix>-<number>` (e.g. `KP-3`), resolved as follows:
+   - Input is a ticket ID short form: `<ticket-id>` is the input verbatim.
+   - Input is an internal ULID, or the ticket was resolved from a prefix: `<ticket-id>` is `<projectPrefix>-<number>` from the retrieved ticket record.
+   - `<ticket-id>` is NEVER the bare ticket prefix value (`projectPrefix`, e.g. `KP`); that field is for lookup/grouping only.
 
 ## Instructions
 
-1. Resolve the ticket: if given a ticket prefix, run `taskboard ticket list | grep <prefix>` to get the ticket ID; otherwise use the given ticket ID. Retrieve details with `taskboard_get_ticket`. If the ticket is not found, stop and say so.
+1. Resolve the ticket: if given a ticket ID short form, run `taskboard ticket list | grep <ticket-id>` to get the internal ULID; if given an internal ULID, use it; if given a bare ticket prefix, follow Input rule 3. Retrieve details with `taskboard_get_ticket` using the internal ULID. If the ticket is not found, stop and say so.
 2. Guard rails: inspect the staged changes with `git status --porcelain` and `git diff --cached --stat`. If nothing is staged, stop and tell the user to review and stage the relevant changes first. Do not stage anything yourself in this skill.
-3. Commit the staged changes with a Conventional Commit message whose optional scope is the ticket prefix:
+3. Commit the staged changes with a Conventional Commit message whose optional scope is the ticket ID:
 
    ```
-   <type>(<prefix>): <description>
+   <type>(<ticket-id>): <description>
    ```
 
    For example: `feat(AK-2): update tb-issue-start skill`. Infer `<type>` from the change (feat, fix, refactor, docs, test, chore, ...) and write a concise description summarizing the ticket title. Commit only what is staged (`git commit`, no `-a`).
@@ -38,15 +48,15 @@ Use this skill ONLY when the user explicitly asks to finish a taskboard ticket, 
    1. Resolve the base branch properly: prefer the repo default branch via `git symbolic-ref refs/remotes/origin/HEAD` (strip the remote prefix); if unavailable, use `main` and confirm with the user before rebasing onto a guessed base.
    2. `git fetch <remote>` then `git rebase <base-branch>`.
    3. IF a git conflict occurs, stop processing immediately, show `git status`, and ask the user to resolve the conflict manually. Do not abort or continue the rebase yourself. The ticket status stays unchanged.
-5. If the rebase succeeded, merge the changes back to the base branch: `git checkout <base-branch>` then `git merge <prefix-branch>`. Verify with `git log`.
+5. If the rebase succeeded, merge the changes back to the base branch: `git checkout <base-branch>` then `git merge <ticket-id>`. Verify with `git log`.
 6. Clean up the ticket worktree and branch (run in EVERY environment), then close the Herdr workspace if applicable:
    1. Git cleanup — unconditional, never gated on the Herdr check:
-      1. Resolve the worktree path for the ticket branch: `git worktree list --porcelain` and find the `worktree <path>` block whose `branch refs/heads/<prefix>` line matches the ticket branch.
+      1. Resolve the worktree path for the ticket branch: `git worktree list --porcelain` and find the `worktree <path>` block whose `branch refs/heads/<ticket-id>` line matches the ticket branch.
       2. Resolve the main repository checkout: `git rev-parse --path-format=absolute --git-common-dir`, strip the trailing `/\.git`, and `cd` there. Run all remaining cleanup commands from the main checkout so `git worktree remove` never targets the worktree you are currently inside.
       3. IF the worktree was found, run `git -C <worktree-path> status --porcelain`. IF the output is not empty, stop and ask the user how to handle the leftover changes before deleting anything. Do not delete a dirty worktree yourself.
       4. Remove the worktree with `git worktree remove <worktree-path>` (never `--force`). If git reports the path does not exist, report that it was already removed and continue.
-      5. Delete the ticket branch with `git branch -d <prefix>` (never `-D`). If git refuses because the branch is not fully merged, stop and ask the user. If the branch does not exist, report that it was already deleted and continue.
-      6. Only touch the worktree and branch named `<prefix>` for this ticket; never remove worktrees or branches belonging to other tickets.
+      5. Delete the ticket branch with `git branch -d <ticket-id>` (never `-D`). If git refuses because the branch is not fully merged, stop and ask the user. If the branch does not exist, report that it was already deleted and continue.
+      6. Only touch the worktree and branch named `<ticket-id>` for this ticket; never remove worktrees or branches belonging to other tickets.
    2. Herdr cleanup — ONLY if the Herdr check `test "${HERDR_ENV:-}" = 1` passes AND the workspace was created by this workflow:
       1. Close the worktree workspace using the `herdr` skill (close/remove the workspace tab or use `herdr workspace close` as the installed binary supports).
       2. Run `herdr worktree remove --workspace <ID>` to remove the worktree.
