@@ -11,6 +11,7 @@ vars:
     - claude-code
     - github-copilot
     - kiro-cli
+    - antigravity-cli
   AGENTS: '{{.AGENTS | default (.DEFAULT_AGENTS | join ",") }}'
   # See https://github.com/vercel-labs/skills#supported-agents
   SKILL_DIRS:
@@ -21,7 +22,11 @@ vars:
       kiro-cli: "$HOME/.kiro/skills"
       opencode: "$HOME/.config/opencode/skills"
       pi: "$HOME/.pi/agent/skills"
+      antigravity-cli: "$HOME/.gemini/antigravity-cli/skills"
   SKILLS_METADATA:
+    - repo: vercel-labs/skills
+      skills:
+        - skills/find-skills
     - repo: ansidev/kiro
       skills:
         - '*'
@@ -30,42 +35,42 @@ vars:
         - '*'
     - repo: anthropics/skills
       skills:
-        - 'skill-creator'
+        - skill-creator
     - repo: blader/humanizer
       skills:
-        - 'humanizer'
+        - humanizer
     - repo: DietrichGebert/ponytail
       skills:
-        - 'ponytail'
+        - ponytail
     - repo: herdrdev/herdr
       skills:
-        - 'herdr'
+        - herdr
     - repo: inkeep/open-knowledge-skills
       skills:
-        - 'skills/core/open-knowledge-discovery'
-        - 'skills/core/open-knowledge'
-        - 'skills/core/open-knowledge-write-skill'
-        - 'skills/starter-packs/worldbuilding/worldbuilding'
-        - 'skills/starter-packs/personal-crm/personal-crm'
-        - 'skills/starter-packs/okf-knowledge-base/okf-knowledge-base'
-        - 'skills/starter-packs/codebase-wiki/codebase-wiki'
-        - 'skills/starter-packs/note-taking/note-taking'
-        - 'skills/starter-packs/writing-workflow/writing-workflow'
-        - 'skills/starter-packs/knowledge-base/research-with-sources'
-        - 'skills/starter-packs/knowledge-base/knowledge-base'
-        - 'skills/starter-packs/knowledge-base/consolidate-notes'
-        - 'skills/starter-packs/software-lifecycle/record-a-decision'
-        - 'skills/starter-packs/software-lifecycle/review-a-design'
-        - 'skills/starter-packs/software-lifecycle/frame-a-proposal'
-        - 'skills/starter-packs/software-lifecycle/write-a-spec'
-        - 'skills/starter-packs/software-lifecycle/write-a-postmortem'
-        - 'skills/starter-packs/software-lifecycle/software-lifecycle'
+        - skills/core/open-knowledge-discovery
+        - skills/core/open-knowledge
+        - skills/core/open-knowledge-write-skill
+        - skills/starter-packs/worldbuilding/worldbuilding
+        - skills/starter-packs/personal-crm/personal-crm
+        - skills/starter-packs/okf-knowledge-base/okf-knowledge-base
+        - skills/starter-packs/codebase-wiki/codebase-wiki
+        - skills/starter-packs/note-taking/note-taking
+        - skills/starter-packs/writing-workflow/writing-workflow
+        - skills/starter-packs/knowledge-base/research-with-sources
+        - skills/starter-packs/knowledge-base/knowledge-base
+        - skills/starter-packs/knowledge-base/consolidate-notes
+        - skills/starter-packs/software-lifecycle/record-a-decision
+        - skills/starter-packs/software-lifecycle/review-a-design
+        - skills/starter-packs/software-lifecycle/frame-a-proposal
+        - skills/starter-packs/software-lifecycle/write-a-spec
+        - skills/starter-packs/software-lifecycle/write-a-postmortem
+        - skills/starter-packs/software-lifecycle/software-lifecycle
     - repo: krzysztofdudek/ResearcherSkill
       skills:
-        - 'researcher'
+        - researcher
     - repo: kunchenguid/gh-axi
       skills:
-        - 'gh-axi'
+        - gh-axi
     - repo: manaflow-ai/cmux
       skills:
         - '*'
@@ -74,7 +79,13 @@ vars:
         - '*'
     - repo: smyrick/skills
       skills:
-        - 'codebase-summary'
+        - codebase-summary
+    - repo: microsoft/playwright-cli
+      skills:
+        - skills/playwright-cli
+    - repo: browser-use/browser-use
+      skills:
+        - skills/browser-use
 
 tasks:
   prepare:
@@ -121,7 +132,7 @@ tasks:
       Optional inputs:
       AGENTS (optional, comma-separated list of agent names)
     deps:
-      - task: install-all-local-skills
+      # - task: install-all-local-skills
       - for:
           var: SKILLS_METADATA
         task: install-skills-from-repo
@@ -253,4 +264,4 @@ tasks:
       - cmd: echo "Removing exiting skill directory {{.SKILL_DIR}}/{{.SKILL}}" && rm -rf "{{.SKILL_DIR}}/{{.SKILL}}"
         if: '[ -d "{{.SKILL_DIR}}/{{.SKILL}}" ]'
       - echo "Linking universal skill {{.SKILL}} to {{.AGENT}} skill directory {{.SKILL_DIR}}..."
-      - ln -sf "$HOME/.agents/skills/{{.SKILL}}" "{{.SKILL_DIR}}"
+      - ln -sfn "$HOME/.agents/skills/{{.SKILL}}" "{{.SKILL_DIR}}"
