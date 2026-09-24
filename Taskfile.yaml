@@ -12,6 +12,7 @@ vars:
     - github-copilot
     - kiro-cli
     - antigravity-cli
+    - devin
   AGENTS: '{{.AGENTS | default (.DEFAULT_AGENTS | join ",") }}'
   # See https://github.com/vercel-labs/skills#supported-agents
   SKILL_DIRS:
@@ -23,6 +24,7 @@ vars:
       opencode: "$HOME/.config/opencode/skills"
       pi: "$HOME/.pi/agent/skills"
       antigravity-cli: "$HOME/.gemini/antigravity-cli/skills"
+      devin: "$HOME/.config/devin/skills"
   SKILLS_METADATA:
     - repo: vercel-labs/skills
       skills:
@@ -30,15 +32,14 @@ vars:
     - repo: ansidev/kiro
       skills:
         - '*'
-    - repo: ansidev/prompt-master
+    - repo: ansidev/mirrored-skills
       skills:
-        - '*'
+        - prompt-master
+        - humanizer
     - repo: anthropics/skills
       skills:
         - skill-creator
-    - repo: blader/humanizer
-      skills:
-        - humanizer
+        - mcp-builder
     - repo: DietrichGebert/ponytail
       skills:
         - ponytail
@@ -82,10 +83,19 @@ vars:
         - codebase-summary
     - repo: microsoft/playwright-cli
       skills:
-        - skills/playwright-cli
+        - playwright-cli
     - repo: browser-use/browser-use
       skills:
-        - skills/browser-use
+        - browser-use
+    - repo: typesafe-ai/skills
+      skills:
+        - typesafe-ai
+    - repo: gabelul/stitch-kit
+      skills:
+        - '*'
+    - repo: guwidoe/pi-playwright
+      skills:
+        - playwright-browser
 
 tasks:
   prepare:
@@ -132,7 +142,7 @@ tasks:
       Optional inputs:
       AGENTS (optional, comma-separated list of agent names)
     deps:
-      # - task: install-all-local-skills
+      - task: install-all-local-skills
       - for:
           var: SKILLS_METADATA
         task: install-skills-from-repo
@@ -244,6 +254,7 @@ tasks:
       SKILL (skill name),
       AGENTS (optional, comma-separated list of agent names)
     cmds:
+      - echo "Linking skill" {{.SKILL}}
       - for:
           var: AGENTS
           split: ','
@@ -260,8 +271,8 @@ tasks:
       AGENT (agent name)
     vars:
       SKILL_DIR: '{{dig .AGENT "" .SKILL_DIRS}}'
+      SKILL_NAME: '{{last (splitList "/" .SKILL)}}'
     cmds:
-      - cmd: echo "Removing exiting skill directory {{.SKILL_DIR}}/{{.SKILL}}" && rm -rf "{{.SKILL_DIR}}/{{.SKILL}}"
-        if: '[ -d "{{.SKILL_DIR}}/{{.SKILL}}" ]'
-      - echo "Linking universal skill {{.SKILL}} to {{.AGENT}} skill directory {{.SKILL_DIR}}..."
-      - ln -sfn "$HOME/.agents/skills/{{.SKILL}}" "{{.SKILL_DIR}}"
+      - cmd: mkdir -p "{{.SKILL_DIR}}" && if [ -e "{{.SKILL_DIR}}/{{.SKILL_NAME}}" ]; then rm -rf "{{.SKILL_DIR}}/{{.SKILL_NAME}}"; fi
+      - echo "Linking universal skill {{.SKILL_NAME}} to {{.AGENT}} skill directory {{.SKILL_DIR}}..."
+      - ln -sfn "$HOME/.agents/skills/{{.SKILL_NAME}}" "{{.SKILL_DIR}}/{{.SKILL_NAME}}"
