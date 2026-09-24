@@ -253,15 +253,16 @@ tasks:
       Optional inputs:
       SKILL (skill name),
       AGENTS (optional, comma-separated list of agent names)
+    vars:
+      SKILL_NAME: '{{last (splitList "/" .SKILL)}}'
     cmds:
-      - echo "Linking skill" {{.SKILL}}
-      - for:
-          var: AGENTS
-          split: ','
-        task: link-one-skill-to-one-agent
-        vars:
-          SKILL: '{{.SKILL}}'
-          AGENT: '{{.ITEM}}'
+      - cmd: |
+          echo "Linking skill" {{.SKILL_NAME}}
+          {{- range $agent := splitList "," .AGENTS }}
+          mkdir -p "{{dig $agent "" $.SKILL_DIRS}}" && if [ -e "{{dig $agent "" $.SKILL_DIRS}}/{{$.SKILL_NAME}}" ]; then rm -rf "{{dig $agent "" $.SKILL_DIRS}}/{{$.SKILL_NAME}}"; fi
+          echo "Linking universal skill {{$.SKILL_NAME}} to {{$agent}} skill directory {{dig $agent "" $.SKILL_DIRS}}..."
+          ln -sfn "$HOME/.agents/skills/{{$.SKILL_NAME}}" "{{dig $agent "" $.SKILL_DIRS}}/{{$.SKILL_NAME}}"
+          {{- end}}
 
   link-one-skill-to-one-agent:
     desc: |
