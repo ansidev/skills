@@ -22,16 +22,17 @@ This skill enables the creation of new issues in the Kanpal tracking system.
 
 2. Required inputs
 
-  - Project name
+  - Project prefix
 
 ## Workflow
 
-1. Ask the user for a clear and concise required inputs of the issue they want to create if necessary.
-2. NEVER create the new ticket without the user's confirmation. DO NOT overconfidence. Once you collect all information, you MUST ask user for confirmation before creation.
-2. Once the user confirms the information of the new ticket, **create the ticket** by using the `kanpal_create_ticket` tool.
-3. **Confirm and Report**: Once the tool returns a successful response, extract the resulting ticket ID and report it clearly to the user. Example response: "The issue X has been created."
-4. **Ask Before Implementation**: After reporting the ticket ID, ask the user whether they want to start implementation. Do not start implementation automatically, and do not treat an unanswered or implicit response as confirmation.
-5. **Handle the Decision**:
-   - If the user explicitly confirms, invoke `/kp-issue-start <ticket-id>` to begin implementation. `kb-issue-start` sets up the isolated worktree environment, so all implementation work happens there, never in the current working tree.
+1. Read the user prompt and try to collect the project prefix. If you cannot get them, ask user.
+2. Call tool `kanpal_get_project` with parameter `{"prefix": "<project-prefix>"}`, then get project ID from field `id`. If the project is not found, stop and inform user.
+3. NEVER create the new ticket without the user's confirmation. DO NOT overconfidence. Once you collect all information, you MUST ask user for confirmation before creation.
+4. Once the user confirms the information of the new ticket, **create the ticket** by using the `kanpal_create_ticket` tool.
+5. **Confirm and Report**: Once the tool returns a successful response, extract the resulting ticket ID and report it clearly to the user. Example response: "The issue X has been created."
+6. **Ask Before Implementation**: After reporting the ticket ID, ask the user whether they want to start implementation. Do not start implementation automatically, and do not treat an unanswered or implicit response as confirmation.
+7. **Handle the Decision**:
+   - If the user explicitly confirms, invoke `/kp-issue-start <ticket-prefix>` to begin implementation. `kb-issue-start` sets up the isolated worktree environment, so all implementation work happens there, never in the current working tree.
    - If the user declines, leave the ticket in its created state and take no implementation action.
-6. If ticket creation fails, surface the failure and do not claim that a ticket was created or begin implementation.
+8. If ticket creation fails, surface the failure and do not claim that a ticket was created or begin implementation.
