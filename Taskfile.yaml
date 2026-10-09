@@ -96,6 +96,9 @@ vars:
     - repo: guwidoe/pi-playwright
       skills:
         - playwright-browser
+    - repo: evondev/evondevKit
+      skills:
+        - ui-ux
 
 tasks:
   prepare:

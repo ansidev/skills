@@ -15,7 +15,7 @@ Use this skill ONLY when the user explicitly asks to finish a kanpal issue, afte
 1. MUST use available tools from `kanpal` MCP.
 3. Use skill `herdr` for all Herdr interactions. Before any `herdr` command, verify the agent runs inside Herdr with `test "${HERDR_ENV:-}" = 1`; if the check fails, skip only the Herdr workspace cleanup and tell the user — the git worktree and branch cleanup still runs.
 4. NEVER set the issue status to `done` until every prior step of this skill has succeeded.
-5. NEVER force-push, force-merge, force-remove a worktree (`git worktree remove --force`), force-delete a branch (`git branch -D`), or auto-abort a rebase without asking the user.
+5. NEVER force-push, force-merge, force-remove a worktree (`git worktree remove --force`), force-delete a branch (`git branch -D`), or auto-abort a rebase unless user confirms or it is defined explicitly in the skill instructions.
 6. MUST call tool `kanpal_get_issue` with parameter `{"key": "<issue-key>"}`.
 7. MUST call tool `kanpal_update_issue` with parameter `{"id":"<issue-id>"}`.
 
@@ -54,5 +54,5 @@ Use this skill ONLY when the user explicitly asks to finish a kanpal issue, afte
       3. Only touch workspaces/worktrees this workflow created; never remove ones you did not create.
 9. Add knowledge: use skill `add-knowledge` to record knowledge related to this issue in the OpenKnowledge base (via the `kb-okf` MCP). Prefer updating an existing document; create a new one only when appropriate.
 10. Close the issue: update the kanpal issue status to `done` using `kanpal_update_issue`. Tool call input parameters are `id` (the issue ID from step 3) and `status` = "done". This step must be last; if any earlier step failed, stop without changing the status and report the failure.
-11. ONLY if the Herdr check `test "${HERDR_ENV:-}" = 1` passes AND the workspace was created by this workflow, then run `bash <skill-directory>/scripts/script.sh ws-del "$1"` to clean up the Herdr workspace.
+11. ONLY if the Herdr check `test "${HERDR_ENV:-}" = 1` passes AND the workspace was created by this workflow, then run `bash <skill-directory>/scripts/script.sh wt-del "$1"` to clean up the Herdr workspace.
 12. Report to user what you have done as a checklist.
