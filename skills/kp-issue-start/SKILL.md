@@ -48,6 +48,25 @@ If a check fails, fix it before continuing:
 - Wrong-name mismatch: IF an existing worktree or branch for this issue was created under the bare issue key (e.g. `KP` instead of `KP-3`), do NOT reuse, rename, or delete it silently — report the mismatch to the user and stop for their decision.
 - Worktree creation fails: stop and report the error to the user. NEVER continue implementing in the main checkout as a fallback.
 
+## Skill selection policy
+
+Workflow: task → classify → resolve skills → execute → verify → report. Agent-agnostic: use whatever skill discovery and loading mechanism your agent provides.
+
+- Always-on: project rules (e.g. `AGENTS.md`), coding conventions, safety rules, and `spec-driven-development`.
+- Task-specific: skills matching the affected area (frontend, backend, database, docs, ...).
+- Validation: skills for the checks the task needs (tests, linting, browser verification, ...).
+
+Before implementing:
+
+1. Understand the task, affected components, framework, and acceptance criteria.
+2. Discover available skills from the global and project skill directories your agent is configured with.
+3. Read each candidate skill's name and description to judge relevance.
+4. Load the complete instructions of every applicable skill before doing the work; load more later when new requirements or details make them relevant.
+5. Follow all mandatory skills. If several apply, combine them; resolve conflicts using project rules, then explicit user requirements.
+6. Prefer the smallest sufficient set. Do not load unrelated skills, and never claim a skill was applied unless you read and followed its instructions.
+7. If the task is ambiguous, inspect the codebase first; ask for clarification only when necessary.
+8. Before finishing, run the validation procedures required by the selected skills.
+
 ## Instructions
 
 1. Input is a issue key.
@@ -55,10 +74,10 @@ If a check fails, fix it before continuing:
 3. If the issue status is `todo`, use tool `kanpal_update_issue` to change the status to `in-progress` and team to `agent`. Otherwise, if the issue status is `in-progress`, continue to the next step. If the issue status is done, return a message indicating that the issue has already been resolved.
 4. If the Herdr check `test "${HERDR_ENV:-}" = 1` passes AND the user asked to start the issue from inside Herdr AND the Worktree gate does NOT pass yet (i.e., you are not already the agent running inside the issue's worktree), run the Herdr automation workflow below. If the gate already passes, you ARE the spawned agent: skip the automation and continue with step 5.
 5. Run the Worktree gate for issue branch `<issue-key>` (see above). This step MUST pass before any implementation step. All remaining steps run inside the worktree directory.
-6. Important: MUST use skill `spec-driven-development` to create a solution for the issue.
+6. Important: Apply the Skill selection policy above to pick the skills for this issue, then MUST use skill `spec-driven-development` (always-on) alongside them to create a solution for the issue.
 7. Important rule: The output of phase 1 of the `spec-driven-development` skill (`Requirements Gathering`) MUST be updated back to the respective kanpal issue comments alongside the skill behaviour.
 8. Additional steps as needed by the `spec-driven-development` skill to complete the solution.
-9. When the implementation finishes, change the issue status to `in-review`; commit exactly the issue-relevant changes without pushing. First confirm with `git rev-parse --show-toplevel` that you are committing inside the issue worktree, not the main checkout.
+9. When the implementation finishes, run the validation procedures required by the selected skills, then change the issue status to `in-review`; commit exactly the issue-relevant changes without pushing. First confirm with `git rev-parse --show-toplevel` that you are committing inside the issue worktree, not the main checkout.
 
 ## Herdr automation workflow (only when `HERDR_ENV=1` and not already inside the issue worktree)
 
