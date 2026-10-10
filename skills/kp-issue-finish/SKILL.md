@@ -52,7 +52,7 @@ Use this skill ONLY when the user explicitly asks to finish a kanpal issue, afte
       1. Close the worktree workspace using the `herdr` skill (close/remove the workspace tab or use `herdr workspace close` as the installed binary supports).
       2. Run `herdr worktree remove --workspace <ID>` to remove the worktree.
       3. Only touch workspaces/worktrees this workflow created; never remove ones you did not create.
-9. Add knowledge: use skill `add-knowledge` to record knowledge related to this issue in the OpenKnowledge base (via the `kb-okf` MCP). Prefer updating an existing document; create a new one only when appropriate.
+9. Add knowledge: use skill `add-knowledge` to record knowledge related to this issue in the OpenKnowledge base (via the `kb-okf` MCP). Prefer updating an existing document; create a new one only when appropriate. Issue notes live at the content-dir-relative path `projects/kanpal/<issue-key-lowercase>-<slug>` (on disk `knowledge/projects/kanpal/...`). NEVER write the path as `knowledge/projects/...` or `knowledge/knowledge/...`, and do not copy the location of an existing misplaced note.
 10. Close the issue: update the kanpal issue status to `done` using `kanpal_update_issue`. Tool call input parameters are `id` (the issue ID from step 3) and `status` = "done". This step must be last; if any earlier step failed, stop without changing the status and report the failure.
 11. ONLY if the Herdr check `test "${HERDR_ENV:-}" = 1` passes AND the workspace was created by this workflow, then run `bash <skill-directory>/scripts/script.sh wt-del "$1"` to clean up the Herdr workspace.
 12. Report to user what you have done as a checklist.
