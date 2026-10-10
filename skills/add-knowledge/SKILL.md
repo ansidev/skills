@@ -18,6 +18,8 @@ When the user asks to save, remember, document, or add knowledge to the second b
 4. DO NOT create knowledge inside the current coding project unless explicitly requested.
 5. Add links to related knowledge when useful.
 6. After writing, verify the result.
+7. Document paths passed to `kb-okf` write/edit/move tools are relative to the KB content dir (`knowledge/`, see `area_ok_config` key `content`). NEVER prefix them with `knowledge/` (wrong: `knowledge/projects/x`, right: `projects/x`). Search results and `exec` output show on-disk paths that include `knowledge/`; strip that prefix before writing. Do not copy the path of an existing doc under `knowledge/knowledge/...` — that is a misplaced doc, not a convention.
+8. Before creating a doc, `exec ls` the target folder (e.g. `ls knowledge/projects/<project>`) to confirm sibling naming and location, and check the written path has no doubled `knowledge/`.
 
 ## Workflow
 
