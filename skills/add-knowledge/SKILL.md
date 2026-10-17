@@ -13,7 +13,9 @@ When the user asks to save, remember, document, or add knowledge to the second b
 ## Rules
 
 1. You MUST use the MCP called `kb-okf`.
-2. MUST use `{"cwd": "/Users/ansidev/projects/kb"}` if tool calls require `cwd` parameter.
+2. MUST pass `"cwd": "/Users/ansidev/projects/kb"` explicitly on EVERY `kb-okf` tool call (`ok_skills`, `ok_exec`, `search`, write/edit/move, etc.). No exceptions, even if the call seems not to need it.
+   - NEVER rely on the current working directory or the MCP client root; they may point at another project (e.g. `/Users/ansidev/projects/personal/kanpal/knowledge`).
+   - `ok_exec` commands run relative to `cwd`, and `cwd` must be inside an OpenKnowledge project (contain `.ok/config.yml`).
 3. MUST preserve the existing OpenKnowledge structure and conventions.
 4. DO NOT create knowledge inside the current coding project unless explicitly requested.
 5. Add links to related knowledge when useful.
@@ -23,7 +25,28 @@ When the user asks to save, remember, document, or add knowledge to the second b
 
 ## Workflow
 
-1. Search existing knowledge before creating a new document. Use tool `kb-okf__search` with following parameters: `cwd`, `limit` (set to 1), `query`.
+1. Search existing knowledge before creating a new document. Use tool `kb-okf__search` with following parameters: `cwd` (always `/Users/ansidev/projects/kb`), `limit` (set to 1), `query`.
+
+   ```json
+   {"cwd": "/Users/ansidev/projects/kb", "limit": 1, "query": "<topic>"}
+   ```
 2. If `resultCount` is 0, create a new document.
 3. Otherwise, update the existing document.
    1. Get the document path from the search result: `results[0].path`.
+
+## Examples (every call includes `cwd`)
+
+```json
+// ok_skills
+{"cwd": "/Users/ansidev/projects/kb"}
+
+// ok_exec
+{"cwd": "/Users/ansidev/projects/kb", "command": "ls knowledge/projects/<project>"}
+```
+
+## Troubleshooting
+
+Both errors below mean `cwd` was omitted or wrong. Retry the same call with `"cwd": "/Users/ansidev/projects/kb"`.
+
+- `Error: cwd is required for tool calls against the global MCP server...` (e.g. `ok_skills`): `cwd` was not passed. Add it.
+- `exec failed: No OpenKnowledge project found at or above <path>...` (e.g. `ok_exec`): `cwd` was missing and a different working directory was inherited, or points outside an OK project. Set `cwd` to `/Users/ansidev/projects/kb`, which contains `.ok/config.yml`.
