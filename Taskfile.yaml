@@ -99,6 +99,13 @@ vars:
     - repo: evondev/evondevKit
       skills:
         - ui-ux
+    - repo: mvschwarz/openrig
+      skills:
+        - rigs
+    - repo: stablyai/orca
+      skills:
+        - orca-cli
+        - orchestration
 
 tasks:
   prepare:

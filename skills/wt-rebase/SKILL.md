@@ -1,21 +1,25 @@
 ---
 name: wt-rebase
-description: Use this skill to rebase the current git branch on top of a base branch, resolve any code conflicts, and fix migration file name conflicts. Invoked as `/wt-rebase --base <base_branch>`. Trigger whenever the user asks to rebase the current branch onto a base branch, continue an in-progress rebase, or fix migration name collisions after a rebase.
+description: Use this skill to rebase the current git branch on top of a base branch, resolve any code conflicts, and fix migration file name conflicts. Invoked as `/wt-rebase --base <base_branch> [--worktree-path <worktree_path>]`. Trigger whenever the user asks to rebase the current branch onto a base branch, continue an in-progress rebase, or fix migration name collisions after a rebase.
 license: MIT
 ---
 
 # wt-rebase
 
-Rebase the current branch on top of `<base_branch>`, resolve conflicts, and make sure migration file names do not collide with ones introduced by the base branch.
+Rebase the current branch (or the branch checked out in `--worktree-path`, when given) on top of `<base_branch>`, resolve conflicts, and make sure migration file names do not collide with ones introduced by the base branch.
 
 ## Arguments
 
-Invocation: `/wt-rebase --base <base_branch>`
+Invocation: `/wt-rebase --base <base_branch> [--worktree-path <worktree_path>]`
 
 - Parse the value that follows `--base` (also accept `--base=<base_branch>`). Example: `--base main` → `<base_branch>` = `main`.
 - Value is a single branch/ref name (e.g. `main`, `origin/main`, `develop`).
 - If `--base` is missing or has no value, ask the user for the base branch. Do not guess.
-- Verify the ref exists: `git rev-parse --verify --quiet <base_branch>`. If not, report it and stop.
+- `--worktree-path <worktree_path>` is optional (also accept `--worktree-path=<worktree_path>`). It is the directory of the worktree whose checked-out branch should be rebased, so the skill can be started from any directory.
+  - If given, verify it is a git worktree (`git -C <worktree_path> rev-parse --show-toplevel`); if not, report it and stop. Then run EVERY git command in this skill as `git -C <worktree_path> ...`, read and edit files under `<worktree_path>`, and never `cd` or touch the current directory's repository.
+  - If omitted, use the current directory and plain `git` commands.
+  - In the rest of this skill, `git ...` means `git -C <worktree_path> ...` when `--worktree-path` is given.
+- Verify the ref exists: `git rev-parse --verify --quiet <base_branch>` (with `-C <worktree_path>` when given). If not, report it and stop.
 
 ## Checklist
 

@@ -72,7 +72,7 @@ Before implementing:
 1. Input is a issue key.
 2. Use tool `kanpal_get_issue` to retrieve the issue details with the resolved issue key. If the issue is not found, return a message indicating that the issue does not exist.
 3. If the issue status is `todo`, use tool `kanpal_update_issue` to change the status to `in-progress` and team to `agent`. Otherwise, if the issue status is `in-progress`, continue to the next step. If the issue status is done, return a message indicating that the issue has already been resolved.
-4. Self-assign if unassigned: if the issue (from `kanpal_get_issue`) has no assignee, assign it to yourself with `kanpal_assign_issue` (`{"id":"<issue-id>","user_id":"<your-user-id>"}`). Resolve `<your-user-id>` from your own agent record: call `kanpal_list_agents` and use the `user_id` of the agent you run as (the one bound by `KANPAL_AGENT_TOKEN`; if unclear, ask the user rather than guessing). If the issue is already assigned (to anyone, including you), leave the assignee unchanged. If you cannot resolve your identity or the assignment is refused (archived agent, outside the project's team), report it to the user and continue without reassigning anyone else.
+4. Self-assign if unassigned: if the issue (from `kanpal_get_issue`) has no assignee, assign it to yourself with `kanpal_assign_issue` (`{"id":"<issue-id>","user_id":"<your-user-id>"}`). Resolve `<your-user-id>` by calling `kanpal_get_me` (no parameters), which returns the connected agent's record; use its `id` field (an agent's id is also its user id). NEVER ask the user who the assignee is. If the issue is already assigned (to anyone, including you), leave the assignee unchanged. If `kanpal_get_me` fails or the assignment is refused (archived agent, outside the project's team), report it to the user and continue without reassigning anyone else.
 5. If the Herdr check `test "${HERDR_ENV:-}" = 1` passes AND the user asked to start the issue from inside Herdr AND the Worktree gate does NOT pass yet (i.e., you are not already the agent running inside the issue's worktree), run the Herdr automation workflow below. If the gate already passes, you ARE the spawned agent: skip the automation and continue with step 6.
 6. Run the Worktree gate for issue branch `<issue-key>` (see above). This step MUST pass before any implementation step. All remaining steps run inside the worktree directory.
 7. Important: Apply the Skill selection policy above to pick the skills for this issue, then MUST use skill `spec-driven-development` (always-on) alongside them to create a solution for the issue.
@@ -91,10 +91,10 @@ Use this workflow to bootstrap the implementation environment automatically, rep
    ```
 
    Read the workspace ID and pane ID from the JSON result. On failure, report the error to the user and stop — do not start the agent, and do not implement the issue yourself.
-2. Start the pi coding agent in the worktree workspace's shell pane, running the same command you would run manually — `pi -a '/approval-mode act'` — expressed through herdr as:
+2. Start the pi coding agent in the worktree workspace's shell pane, running the same command you would run manually — `pi -a '/approval-mode auto'` — expressed through herdr as:
 
    ```bash
-   herdr agent start <agent-name> --kind pi --pane <pane-id> -- -a "/approval-mode act"
+   herdr agent start <agent-name> --kind pi --pane <pane-id> -- -a "/approval-mode auto"
    ```
 
    The pane ID comes from step 1. Choose a unique agent name matching `[a-z][a-z0-9_-]{0,31}`. On failure, report the error and leave the workspace for manual inspection.

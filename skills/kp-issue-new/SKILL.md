@@ -36,6 +36,6 @@ This skill enables the creation of new issues in the Kanpal tracking system.
 7. **Confirm and Report**: Once the tool returns a successful response, extract the resulting issue ID and report it clearly to the user. Example response: "The issue X has been created."
 8. **Ask Before Implementation**: After reporting the issue ID, ask the user whether they want to start implementation. Do not start implementation automatically, and do not treat an unanswered or implicit response as confirmation.
 9.  **Handle the Decision**:
-   - If the user explicitly confirms, invoke `/kp-issue-start <issue-prefix>` to begin implementation. `kb-issue-start` sets up the isolated worktree environment, so all implementation work happens there, never in the current working tree.
+   - If the user explicitly confirms, invoke `bash <skill-directory>/scripts/script.sh start-issue -b <current-branch> -i <issue-key>` to begin implementation, where `<current-branch>` is the current active git branch (resolve it with `git branch --show-current`). `kp-issue-start` sets up the isolated worktree environment, so all implementation work happens there, never in the current working tree.
    - If the user declines, leave the issue in its created state and take no implementation action.
 10. If issue creation fails, surface the failure and do not claim that a issue was created or begin implementation.
