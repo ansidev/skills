@@ -42,12 +42,12 @@ function ws-open() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
       -h|--help)
-        print -r "${HELP_MSG}"
+        printf '%s\n' "${HELP_MSG}"
         return 0
         ;;
       -i|--interactive)
         if [[ -z ${2:-} ]]; then
-          print -r "Error: -i|--interactive requires a value"
+          printf '%s\n' "Error: -i|--interactive requires a value"
           return 1
         fi
         echo "\$2 = $2"
@@ -55,8 +55,8 @@ function ws-open() {
         shift 2
         ;;
       *)
-        print -r "Error: unknown option '$1'"
-        print -r "${HELP_MSG}"
+        printf '%s\n' "Error: unknown option '$1'"
+        printf '%s\n' "${HELP_MSG}"
         return 1
         ;;
     esac
@@ -93,12 +93,12 @@ function wt-switch() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
       -h|--help)
-        print -r "${HELP_MSG}"
+        printf '%s\n' "${HELP_MSG}"
         return 0
         ;;
       -p|--project)
         if [[ -z ${2:-"${CURRENT_DIR}"} ]]; then
-          print -r "Error: -p|--project requires a value"
+          printf '%s\n' "Error: -p|--project requires a value"
           return 1
         fi
         PROJECT=$2
@@ -106,7 +106,7 @@ function wt-switch() {
         ;;
       -t|--target)
         if [[ -z ${2:-} ]]; then
-          print -r "Error: -t|--target requires a value"
+          printf '%s\n' "Error: -t|--target requires a value"
           return 1
         fi
         TARGET_BRANCH=$2
@@ -118,7 +118,7 @@ function wt-switch() {
         ;;
       -b|--base)
         if [[ -z ${2:-} ]]; then
-          print -r "Error: -b|--base requires a value"
+          printf '%s\n' "Error: -b|--base requires a value"
           return 1
         fi
         BASE_BRANCH=$2
@@ -126,7 +126,7 @@ function wt-switch() {
         ;;
       -l|--label)
         if [[ -z ${2:-} ]]; then
-          print -r "Error: -l|--label requires a value"
+          printf '%s\n' "Error: -l|--label requires a value"
           return 1
         fi
         HERDR_WORKSPACE_LABEL=$2
@@ -134,15 +134,15 @@ function wt-switch() {
         ;;
       -f|--focus)
         if [[ -z ${2:-} ]]; then
-          print -r "Error: -f|--focus requires a value"
+          printf '%s\n' "Error: -f|--focus requires a value"
           return 1
         fi
         IS_FOCUS=$2
         shift 2
         ;;
       *)
-        print -r "Error: unknown option '$1'"
-        print -r "${HELP_MSG}"
+        printf '%s\n' "Error: unknown option '$1'"
+        printf '%s\n' "${HELP_MSG}"
         return 1
         ;;
     esac
@@ -191,7 +191,7 @@ function wt-switch() {
   echo "IS_CREATE: $IS_CREATE"  >&2
   echo "IS_FOCUS: $IS_FOCUS"  >&2
   echo  >&2
-  print -r "[DEBUG] Running ${FINAL_CMD}"
+  printf '%s\n' "[DEBUG] Running ${FINAL_CMD}"
 
   eval "${FINAL_CMD}"
 }
@@ -215,12 +215,12 @@ function start-issue() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
       -h|--help)
-        print -r "${HELP_MSG}"
+        printf '%s\n' "${HELP_MSG}"
         return 0
         ;;
       -i|--issue)
         if [[ -z ${2:-} ]]; then
-          print -r "Error: -i|--issue requires a value"
+          printf '%s\n' "Error: -i|--issue requires a value"
           return 1
         fi
         ISSUE_KEY=$2
@@ -228,7 +228,7 @@ function start-issue() {
         ;;
       -b|--base)
         if [[ -z ${2:-} ]]; then
-          print -r "Error: -b|--base requires a value"
+          printf '%s\n' "Error: -b|--base requires a value"
           return 1
         fi
         BASE_BRANCH=$2
@@ -236,23 +236,23 @@ function start-issue() {
         ;;
       -m|--model)
         if [[ -z ${2:-} ]]; then
-          print -r "Error: -m|--model requires a value"
+          printf '%s\n' "Error: -m|--model requires a value"
           return 1
         fi
         MODEL=$2
         shift 2
         ;;
       *)
-        print -r "Error: unknown option '$1'"
-        print -r "${HELP_MSG}"
+        printf '%s\n' "Error: unknown option '$1'"
+        printf '%s\n' "${HELP_MSG}"
         return 1
         ;;
     esac
   done
 
   if [[ -z $ISSUE_KEY || -z $BASE_BRANCH ]]; then
-    print -r "Error: -i and -b are required"
-    print -r "${HELP_MSG}"
+    printf '%s\n' "Error: -i and -b are required"
+    printf '%s\n' "${HELP_MSG}"
     return 1
   fi
 
@@ -262,13 +262,13 @@ function start-issue() {
   WORKSPACE_ID=$(herdr workspace list | jq -r --arg label "$ISSUE_KEY" '
     [.result.workspaces[] | select(.label == $label)] | last | .workspace_id // empty')
   if [[ -z $WORKSPACE_ID ]]; then
-    print -r "Error: herdr workspace not found for ${ISSUE_KEY}" >&2
+    printf '%s\n' "Error: herdr workspace not found for ${ISSUE_KEY}" >&2
     return 1
   fi
 
   PANE_ID=$(herdr pane list --workspace "${WORKSPACE_ID}" | jq -r '.result.panes[0].pane_id // empty')
   if [[ -z $PANE_ID ]]; then
-    print -r "Error: no pane found in workspace ${WORKSPACE_ID}" >&2
+    printf '%s\n' "Error: no pane found in workspace ${WORKSPACE_ID}" >&2
     return 1
   fi
 
