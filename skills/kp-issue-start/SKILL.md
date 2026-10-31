@@ -91,10 +91,10 @@ Use this workflow to bootstrap the implementation environment automatically, rep
    ```
 
    Read the workspace ID and pane ID from the JSON result. On failure, report the error to the user and stop — do not start the agent, and do not implement the issue yourself.
-2. Start the pi coding agent in the worktree workspace's shell pane, running the same command you would run manually — `pi -a '/approval-mode auto'` — expressed through herdr as:
+2. Start the pi coding agent in the worktree workspace's shell pane, running the same command you would run manually — `pi -a '/approval-mode act'` — expressed through herdr as:
 
    ```bash
-   herdr agent start <agent-name> --kind pi --pane <pane-id> -- -a "/approval-mode auto"
+   herdr agent start <agent-name> --kind pi --pane <pane-id> -- -a "/approval-mode act"
    ```
 
    The pane ID comes from step 1. Choose a unique agent name matching `[a-z][a-z0-9_-]{0,31}`. On failure, report the error and leave the workspace for manual inspection.

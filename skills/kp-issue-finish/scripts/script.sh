@@ -167,7 +167,9 @@ function wt-switch() {
   WORKSPACE_DIR="${BASE_WORKTREE_DIR}/${PROJECT}/${TARGET_BRANCH}"
   if [[ $IS_CREATE == true ]]; then
     COMMAND="create"
-    ARGS+=( --base $BASE_BRANCH --branch ${TARGET_BRANCH} --path ${WORKSPACE_DIR} )
+    # Anchor to the calling repo: without --workspace/--cwd herdr uses the focused
+    # workspace, which may belong to a different repository.
+    ARGS+=( --cwd "${PWD}" --base $BASE_BRANCH --branch ${TARGET_BRANCH} --path ${WORKSPACE_DIR} )
   else
     COMMAND="open"
     HERDR_WORKSPACE_ID=$(ws-id ${TARGET_BRANCH})
@@ -258,11 +260,15 @@ function start-issue() {
 
   wt-switch -c -t "${ISSUE_KEY}" -b "${BASE_BRANCH}" || return 1
 
-  # wt-switch labels the new workspace with the issue key (focused one wins if duplicated)
-  WORKSPACE_ID=$(herdr workspace list | jq -r --arg label "$ISSUE_KEY" '
-    [.result.workspaces[] | select(.label == $label)] | last | .workspace_id // empty')
+  # Resolve the new workspace by its worktree checkout path, not by label:
+  # stale workspaces may reuse the issue-key label with no worktree attached.
+  local WORKSPACE_DIR="${HOME}/projects/worktrees/$(basename "${PWD}")/${ISSUE_KEY}"
+  WORKSPACE_ID=$(herdr workspace list | jq -r --arg dir "$WORKSPACE_DIR" '
+    .result.workspaces[]
+    | select(.worktree.checkout_path == $dir)
+    | .workspace_id' | tail -n 1)
   if [[ -z $WORKSPACE_ID ]]; then
-    printf '%s\n' "Error: herdr workspace not found for ${ISSUE_KEY}" >&2
+    printf '%s\n' "Error: herdr workspace with worktree ${WORKSPACE_DIR} not found for ${ISSUE_KEY}" >&2
     return 1
   fi
 
@@ -272,7 +278,7 @@ function start-issue() {
     return 1
   fi
 
-  PIA_CMD="pi -a '/approval-mode auto' '/pi-permission-suite debug on' '/kp-issue-start ${ISSUE_KEY}'"
+  PIA_CMD="pi -a '/approval-mode act' '/pi-permission-suite debug on' '/kp-issue-start ${ISSUE_KEY}'"
 
   if [[ -n $MODEL ]]; then
     PIA_CMD="${PIA_CMD} --model ${MODEL}"
