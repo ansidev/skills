@@ -106,6 +106,9 @@ vars:
       skills:
         - orca-cli
         - orchestration
+    - repo: kaankiziltug/logo-design-skill
+      skills:
+        - logo-design
 
 tasks:
   prepare:
