@@ -6,12 +6,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../../lib/host-runtime.sh"
 
 case "${1:-}" in
-  detect|agent-start|agent-prompt|workspace-close)
+  detect|worktree-create|worktree-lookup|agent-start|agent-prompt|workspace-close)
     op="$1"; shift
     hr_run "$op" "$@"
     ;;
   *)
     hr_fail unknown "${1:-help}" INVALID_ARGS \
-      "use ../../lib/host-runtime for host lifecycle operations; supported: detect, agent-start, agent-prompt, workspace-close"
+      "use ../../lib/host-runtime for host lifecycle operations; supported: detect, worktree-create, worktree-lookup, agent-start, agent-prompt, workspace-close"
     ;;
 esac

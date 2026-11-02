@@ -44,9 +44,11 @@ Run both checks; every later step of this skill runs only after both succeed:
 If a check fails, fix it before continuing:
 
 - Check 1 fails (you are in the main checkout): create the worktree under `${HOME}/projects/worktrees/<repo-name>/<issue-key>`, then `cd` into it and re-run the gate.
-   - Inside Herdr (`HERDR_ENV=1`): run `bash <skill-directory>/scripts/script.sh wt-switch -c -b <base-branch> -f false -t <issue-key>`, then `cd "${HOME}/projects/worktrees/<repo-name>/<issue-key>"`. Set `<base-branch>` to the resolved default branch.
-  - Outside Herdr: resolve the default branch with `git symbolic-ref refs/remotes/origin/HEAD` (strip the remote prefix; fall back to `main` only after confirming with the user), ensure `${HOME}/projects/worktrees/<repo-name>` exists (`mkdir -p "${HOME}/projects/worktrees/<repo-name>"`), then `git fetch origin && git worktree add "${HOME}/projects/worktrees/<repo-name>/<issue-key>" -b <issue-key> <default-branch> && cd "${HOME}/projects/worktrees/<repo-name>/<issue-key>"`.
-- Check 2 fails but check 1 passes: locate the worktree for branch `<issue-key>` with `git worktree list --porcelain` (or the `wt-dir` helper from `kp-issue-finish/scripts/herdr-workspace.sh`), `cd` into it, and re-run the gate. If no such worktree exists, treat it as check 1 failing.
+   - Inside the issue's worktree? (handle via adapter) create the worktree under `${HOME}/projects/worktrees/<repo-name>/<issue-key>`, then `cd` into it and re-run the gate.
+      - Invoke `bash <skill-directory>/../lib/host-runtime detect`; if `unknown`, stop and report.
+      - If `herdr-tui` or `herdr-desktop`: run `bash <skill-directory>/../lib/host-runtime worktree-create --issue <issue-key> --base <base-branch>`, then `cd` into `worktree_path` from the envelope.
+      - If `outside`: resolve the default branch with `git symbolic-ref refs/remotes/origin/HEAD` (strip the remote prefix; fall back to `main` only after confirming with the user), ensure `${HOME}/projects/worktrees/<repo-name>` exists (`mkdir -p ...`), then `git fetch origin && git worktree add "${HOME}/projects/worktrees/<repo-name>/<issue-key>" -b <issue-key> <default-branch> && cd "${HOME}/projects/worktrees/<repo-name>/<issue-key>"`.
+- Check 2 fails but check 1 passes: locate the worktree for branch `<issue-key>` with `bash <skill-directory>/../lib/host-runtime worktree-lookup --issue <issue-key>` or `git worktree list --porcelain`, `cd` into it, and re-run the gate. If no such worktree exists, treat it as check 1 failing.
 - Wrong-name mismatch: IF an existing worktree or branch for this issue was created under the bare issue key (e.g. `KP` instead of `KP-3`), do NOT reuse, rename, or delete it silently — report the mismatch to the user and stop for their decision.
 - Worktree creation fails: stop and report the error to the user. NEVER continue implementing in the main checkout as a fallback.
 
@@ -107,21 +109,21 @@ Use this workflow to bootstrap the implementation environment automatically, rep
 1. Create the worktree workspace named by the issue ID under `${HOME}/projects/worktrees/<repo-name>`, without stealing focus. For issue KP-3 in repo `skills` this is literally `--branch KP-3 --label KP-3` — never `--branch KP`:
 
    ```bash
-   mkdir -p "${HOME}/projects/worktrees/<repo-name>" && herdr worktree create --branch <issue-key> --label <issue-key> --path "${HOME}/projects/worktrees/<repo-name>/<issue-key>" --no-focus
+   mkdir -p "${HOME}/projects/worktrees/<repo-name>" && bash <skill-directory>/../lib/host-runtime worktree-create --issue <issue-key> --base <base-branch>
    ```
 
    Read the workspace ID and pane ID from the JSON result. On failure, report the error to the user and stop — do not start the agent, and do not implement the issue yourself.
 2. Start the pi coding agent in the worktree workspace's shell pane, running the same command you would run manually — `pi -a '/approval-mode act'` — expressed through herdr as:
 
    ```bash
-   herdr agent start <agent-name> --kind pi --pane <pane-id> -- -a "/approval-mode act"
+   bash <skill-directory>/../lib/host-runtime agent-start --issue <issue-key> --args "pi -a '/approval-mode act'"
    ```
 
    The pane ID comes from step 1. Choose a unique agent name matching `[a-z][a-z0-9_-]{0,31}`. On failure, report the error and leave the workspace for manual inspection.
 3. Deliver the issue prompt to the agent so it starts working in the new session:
 
    ```bash
-   herdr agent prompt <agent-name> "/skill:kp-issue-start <issue-key>"
+   bash <skill-directory>/../lib/host-runtime agent-prompt --issue <issue-key> --text "/skill:kp-issue-start <issue-key>"
    ```
 
    Optionally pass `--wait` to wait only until the agent settles after its first turn — never wait for the whole implementation.

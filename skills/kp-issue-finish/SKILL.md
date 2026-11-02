@@ -38,7 +38,7 @@ Parsing rules:
 2. Follow the Cancel workflow when `--cancel` is given; otherwise follow the Merge workflow.
 3. Use the shared `skills/lib/host-runtime` adapter for host lifecycle operations. It detects `herdr-tui`, `herdr-desktop`, or `outside`; an `unknown` result is a stop condition and must never cause a fallback command path. Host cleanup is skipped only for `outside`; git worktree and branch cleanup remains mandatory.
 4. NEVER set the issue status to `done` (Merge workflow) or `cancelled` (Cancel workflow) outside this skill, and never set `done` until every prior step of this skill has succeeded.
-5. NEVER force-push, force-merge, force-remove a worktree (`git worktree remove --force`), force-delete a branch (`git branch -D`), or auto-abort a rebase unless user confirms or it is defined explicitly in the skill instructions. The only such exception is the Cancel workflow, which MUST clean up with `wt-del` (it force-removes the worktree and branch by design).
+5. NEVER force-push, force-merge, force-remove a worktree (`git worktree remove --force`), force-delete a branch (`git branch -D`), or auto-abort a rebase unless user confirms or it is defined explicitly in the skill instructions. The only such exception is the Cancel workflow, which MUST clean up with forced removal (it force-removes the worktree and branch by design through the host adapter).
 6. MUST call tool `kanpal_get_issue` with parameter `{"key": "<issue-key>"}`.
 7. MUST call tool `kanpal_update_issue` with parameter `{"id":"<issue-id>"}`.
 
@@ -48,7 +48,7 @@ Do NOT commit, rebase, or merge the issue worktree branch, and do NOT add knowle
 
 1. Call tool `kanpal_get_issue` with `{"key": "<issue-key>"}`. If the issue is not found, stop and say so. Read `id` from the result (<issue-id>).
 2. Update the issue status: call `kanpal_update_issue` with `{"id": "<issue-id>", "status": "cancelled"}`. If the call fails, stop and report the failure; do not clean up.
-3. Clean up the worktree (and Herdr workspace) with the script function `wt-del`: run `bash <skill-directory>/scripts/script.sh wt-del "<issue-key>"` from the main repository checkout (`cd` there in the same command, e.g. `(cd <main-checkout> && bash ...)`; resolve `<main-checkout>` with `git rev-parse --path-format=absolute --git-common-dir`, stripping the trailing `/.git`). `wt-del` relies on the current directory (`git worktree list`, repo name), so it cannot use `-C`; run it from a subshell, never from inside the worktree being removed. (`wt-del` calls `herdr`; if the Herdr check `test "${HERDR_ENV:-}" = 1` fails, tell the user the Herdr part may have failed.)
+3. Clean up the host agent (if any): run `bash <skill-directory>/../lib/host-runtime workspace-close --issue <issue-key>` (best-effort; report any `RUNTIME_UNSUPPORTED`/`NO_HOST_AGENT` error but do not stop). Then clean up the git worktree and branch with forced removal (Cancel workflow only, by design): `(cd <main-checkout> && git worktree remove --force <worktree-path> && git branch -D <issue-key>)`. Run from the main checkout, never inside the worktree being removed. Only touch paths named `<issue-key>`.
 4. Report to the user what you have done as a checklist.
 
 ## Merge workflow (`--cancel` not given)
@@ -61,7 +61,7 @@ The skill may be started from ANY directory (main checkout, the worktree, or els
    1. Confirm the plan with the user (once; when `AUTO_YES=true`, skip the confirmation, just state the plan and continue): rebase and fast-forward merge `<issue-key>` onto `<base-branch>`, then clean up its worktree, branch and Herdr workspace. NEVER rebase or merge onto a guessed base.
    2. Resolve `<main-checkout>`: `git rev-parse --path-format=absolute --git-common-dir`, strip the trailing `/.git`. If the current directory is not inside a git repo, ask the user for the repo path. Then resolve `<worktree-path>`: `git -C <main-checkout> worktree list --porcelain`, the `worktree <path>` block whose `branch refs/heads/<issue-key>` matches. If none is found, stop and report (if the branch exists without a worktree, ask the user).
    3. Call `kanpal_get_issue` with `{"key": "<issue-key>"}`. If not found, stop and say so. Read `id` (<issue-id>). If the status is already `done` or `cancelled`, stop and report.
-   4. If the Herdr check `test "${HERDR_ENV:-}" = 1` passes, resolve the Herdr workspace ID of `<issue-key>` now (while the worktree still exists) with `bash <skill-directory>/scripts/script.sh ws-id "<issue-key>"` and remember it as `<workspace-id>`. If not found, remember that there is none.
+   4. If running under a managed host, resolve the host workspace ID of `<issue-key>` now (while the worktree still exists) with `bash <skill-directory>/../lib/host-runtime worktree-lookup --issue <issue-key>` and remember it as `<workspace-id>` (empty if none). Otherwise remember there is none.
 2. Commit:
    1. Run `git -C <worktree-path> status --porcelain`. If there are unstaged or untracked changes, ask the user how to handle them before continuing. Never use `git add -A` or `git commit -a`.
    2. If there are staged changes, commit only them (`git -C <worktree-path> commit`) with a Conventional Commit message whose scope is the issue key:
@@ -90,9 +90,7 @@ The skill may be started from ANY directory (main checkout, the worktree, or els
    5. Only touch the worktree and branch named `<issue-key>`.
 6. Add knowledge: use skill `add-knowledge` to record knowledge related to this issue in the OpenKnowledge base (via the `kb-okf` MCP). Prefer updating an existing document; create a new one only when appropriate. Issue notes live at the content-dir-relative path `projects/kanpal/<issue-key-lowercase>-<slug>` (on disk `knowledge/projects/kanpal/...`). NEVER write the path as `knowledge/projects/...` or `knowledge/knowledge/...`, and do not copy the location of an existing misplaced note. If this step fails, warn, continue, and mention it in the report.
 7. Close the issue: call `kanpal_update_issue` with `{"id": "<issue-id>", "status": "done"}`. Only do this if steps 1-5 all succeeded; otherwise stop without changing the status and report the failure.
-8. Herdr cleanup (last, because it may close the session you are running in). Only if the Herdr check passes and a `<workspace-id>` was resolved in step 1.5, regardless of who created the workspace:
-   1. Print the step 9 report FIRST (as the final message content), then run the commands below.
-   2. Close the workspace with the `herdr` skill (`herdr workspace close <workspace-id>`).
-   3. If its worktree still exists in Herdr, run `herdr worktree remove --workspace <workspace-id>`. If it is already gone, continue.
-   4. Never touch workspaces belonging to other issues. Do NOT use `scripts/script.sh wt-del` here: it force-removes the worktree and branch.
+8. Host cleanup (last, because it may close the session you are running in). Only if a `<workspace-id>` was resolved in step 1.4, regardless of who created the workspace:
+   1. Print the step 9 report FIRST (as the final message content), then run `bash <skill-directory>/../lib/host-runtime workspace-close --issue <issue-key>`.
+   2. Never touch workspaces belonging to other issues.
 9. Report to the user what you have done as a checklist (commit, rebase, merge, worktree/branch cleanup, knowledge, status, Herdr cleanup, plus any skipped or warned steps).

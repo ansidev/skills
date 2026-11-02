@@ -36,6 +36,101 @@ hr_detect_runtime() {
 
 hr_address() { sed -n 's/.*"address"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1; }
 
+hr_repo_name() {
+  local repo="${1:-}"
+  if [[ -n "$repo" ]]; then printf '%s\n' "$repo"; return 0; fi
+  local common_dir
+  common_dir=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 1
+  printf '%s\n' "$(basename "${common_dir%/.git}")"
+}
+
+hr_worktree_root() { printf '%s' "${HR_WORKTREE_ROOT:-${HOME}/projects/worktrees}"; }
+
+hr_git_worktree_create() {
+  local issue="$1" base="$2" repo path out
+  repo=$(hr_repo_name "${3:-}") || { hr_fail "$HR_RUNTIME" worktree-create WORKTREE_CREATE_FAILED "cannot resolve repo name; pass --repo"; return; }
+  path="$(hr_worktree_root)/$repo/$issue"
+  mkdir -p "$(hr_worktree_root)/$repo"
+  if ! out=$(git worktree add "$path" -b "$issue" "$base" 2>&1); then
+    hr_fail "$HR_RUNTIME" worktree-create WORKTREE_CREATE_FAILED "git worktree add failed: $out"; return
+  fi
+  hr_ok "$HR_RUNTIME" worktree-create "{\"worktree_path\":\"$path\",\"branch\":\"$issue\",\"base\":\"$base\"}"
+}
+
+hr_worktree_create_tui() {
+  local issue="$1" base="$2" repo="${3:-}" focus="${4:-false}" path out workspace_id
+  repo=$(hr_repo_name "$repo") || { hr_fail herdr-tui worktree-create WORKTREE_CREATE_FAILED "cannot resolve repo name; pass --repo"; return; }
+  path="$(hr_worktree_root)/$repo/$issue"
+  mkdir -p "$(hr_worktree_root)/$repo"
+  local focus_flags=()
+  [[ "$focus" == false ]] && focus_flags=(--no-focus)
+  if ! out=$(herdr worktree create --branch "$issue" --label "$issue" --path "$path" "${focus_flags[@]}" 2>&1); then
+    hr_fail herdr-tui worktree-create WORKTREE_CREATE_FAILED "herdr worktree create failed: $out"; return
+  fi
+  workspace_id=$(printf '%s\n' "$out" | sed -n 's/.*"workspace_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
+  local ws_json
+  if [[ -n "$workspace_id" ]]; then ws_json="\"$workspace_id\""; else ws_json=null; fi
+  hr_ok herdr-tui worktree-create "{\"worktree_path\":\"$path\",\"branch\":\"$issue\",\"base\":\"$base\",\"workspace_id\":$ws_json}"
+}
+
+hr_worktree_create_desktop() {
+  hr_git_worktree_create "$@"
+}
+
+hr_worktree_create_outside() {
+  hr_git_worktree_create "$@"
+}
+
+hr_git_worktree_lookup() {
+  local issue="$1" path
+  path=$(git worktree list --porcelain 2>&1 | awk -v I="refs/heads/$issue" '
+    /^worktree / { p=substr($0,10) }
+    /^branch / { if ($2==I) { print p; exit 0 } }
+  ')
+  [[ -n "$path" ]] || { hr_fail "$HR_RUNTIME" worktree-lookup WORKTREE_NOT_FOUND "no worktree on branch $issue"; return; }
+  hr_ok "$HR_RUNTIME" worktree-lookup "{\"worktree_path\":\"$path\",\"workspace_id\":null}"
+}
+
+hr_worktree_lookup_tui() {
+  local issue="$1" wt_path workspace_id=null workspaces
+  wt_path=$(hr_git_worktree_path_tui "$issue") || { hr_fail herdr-tui worktree-lookup WORKTREE_NOT_FOUND "no worktree on branch $issue"; return; }
+  workspaces=$(herdr workspace list 2>&1) || workspaces=""
+  if [[ -n "$workspaces" ]]; then
+    while IFS= read -r line; do
+      local wid wpath
+      wid=$(printf '%s' "$line" | sed -n 's/.*"workspace_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+      wpath=$(printf '%s' "$line" | sed -n 's/.*"worktree_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+      if [[ -n "$wid" && "$wpath" == "$wt_path" ]]; then workspace_id="$wid"; break; fi
+    done <<< "$workspaces"
+  fi
+  hr_ok herdr-tui worktree-lookup "{\"worktree_path\":\"$wt_path\",\"workspace_id\":$workspace_id}"
+}
+
+hr_git_worktree_path_tui() {
+  local issue="$1"
+  git worktree list --porcelain 2>/dev/null | awk -v I="refs/heads/$issue" '
+    /^worktree / { p=substr($0,10) }
+    /^branch / { if ($2==I) { print p; exit 0 } }
+  '
+}
+
+hr_worktree_lookup_desktop() { hr_git_worktree_lookup "$@"; }
+hr_worktree_lookup_outside() { hr_git_worktree_lookup "$@"; }
+
+hr_workspace_close_tui() {
+  local issue="$1" wid
+  wid=$(hr_run worktree-lookup --issue "$issue" 2>/dev/null | sed -n 's/.*"workspace_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+  if [[ -z "$wid" ]]; then
+    hr_ok herdr-tui workspace-close '{"closed":0,"note":"no Herdr workspace found for this issue"}'
+    return
+  fi
+  if ! herdr workspace close "$wid" >/dev/null 2>&1; then
+    hr_fail herdr-tui workspace-close CLOSE_FAILED "herdr workspace close $wid failed"
+    return
+  fi
+  hr_ok herdr-tui workspace-close "{\"closed\":1,\"workspace_id\":\"$wid\"}"
+}
+
 hr_agent_start_tui() {
   local issue="$1" workspace="$2" args="$3" panes pane_id name
   panes=$(herdr pane list --workspace "$workspace" 2>&1) || { hr_fail herdr-tui agent-start AGENT_START_FAILED "herdr pane list failed: $panes"; return; }
@@ -88,13 +183,16 @@ hr_workspace_close_desktop() {
 
 hr_run() {
   local op="$1"; shift
-  local issue="" text="" args="" workspace=""
+  local issue="" text="" args="" workspace="" base="" repo="" focus=""
   while (($#)); do
     case "$1" in
       --issue) issue="$2"; shift 2 ;;
       --text) text="$2"; shift 2 ;;
       --args) args="$2"; shift 2 ;;
       --workspace) workspace="$2"; shift 2 ;;
+      --base) base="$2"; shift 2 ;;
+      --repo) repo="$2"; shift 2 ;;
+      --focus) focus="$2"; shift 2 ;;
       *) hr_fail unknown "$op" INVALID_ARGS "unknown option $1"; return ;;
     esac
   done
@@ -111,9 +209,15 @@ hr_run() {
     agent-prompt)
       [[ -n "$issue" && -n "$text" ]] || { hr_fail "$runtime" "$op" INVALID_ARGS "--issue and --text are required"; return; }
       case "$runtime" in herdr-desktop) hr_agent_prompt_desktop "$issue" "$text" ;; herdr-tui) hr_agent_prompt_tui "$issue" "$text" ;; outside) hr_fail outside agent-prompt NO_HOST_AGENT "no managed host detected; there is no agent to prompt" ;; esac ;;
+    worktree-create)
+      [[ -n "$issue" && -n "$base" ]] || { hr_fail "$runtime" "$op" INVALID_ARGS "--issue and --base are required"; return; }
+      case "$runtime" in herdr-tui) hr_worktree_create_tui "$issue" "$base" "$repo" "${focus:-false}" ;; herdr-desktop|outside) hr_git_worktree_create "$issue" "$base" "$repo" ;; esac ;;
+    worktree-lookup)
+      [[ -n "$issue" ]] || { hr_fail "$runtime" "$op" INVALID_ARGS "--issue is required"; return; }
+      case "$runtime" in herdr-tui) hr_worktree_lookup_tui "$issue" ;; herdr-desktop|outside) hr_git_worktree_lookup "$issue" ;; esac ;;
     workspace-close)
       [[ -n "$issue" ]] || { hr_fail "$runtime" "$op" INVALID_ARGS "--issue is required"; return; }
-      case "$runtime" in herdr-desktop) hr_workspace_close_desktop "$issue" ;; outside) hr_ok outside workspace-close '{"closed":0,"note":"outside host: nothing to close"}' ;; herdr-tui) hr_fail herdr-tui workspace-close RUNTIME_UNSUPPORTED "Herdr TUI adapter is not yet available" ;; esac ;;
+      case "$runtime" in herdr-desktop) hr_workspace_close_desktop "$issue" ;; outside) hr_ok outside workspace-close '{"closed":0,"note":"outside host: nothing to close"}' ;; herdr-tui) hr_workspace_close_tui "$issue" ;; esac ;;
     *) hr_fail "$runtime" "$op" INVALID_ARGS "unknown operation '$op'" ;;
   esac
 }
