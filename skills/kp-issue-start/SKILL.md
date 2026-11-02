@@ -17,7 +17,7 @@ Use this skill when the user asks to fix, correct, or resolve an issue in the ka
 3. MUST call tool `kanpal_update_issue` with parameter `{"id":"<issue-id>"}`.
 4. NEVER set a issue status to `done` in this skill. Closing a issue is reserved for skill `kp-issue-finish`, which the user runs explicitly after manual review.
 5. When the implementation work finishes, stage exactly the issue-relevant files with `git add <files>`; then create local commit. NEVER push, and NEVER stage unrelated files, temp artifacts, or scratch output.
-6. Before any host lifecycle operation, invoke `bash <skill-directory>/../lib/host-runtime <operation> ...` and inspect its normalized JSON envelope. If it reports `runtime: "unknown"`, stop and report the detection error; never fall back to another host's command path. `herdr-tui` uses `herdr`; `herdr-desktop` uses `herdr-app` for window-side commands and `hc` for terminal/agent operations; `outside` performs no host commands.
+6. Before any host lifecycle operation, invoke `bash <skill-directory>/lib/host-runtime <operation> ...` and inspect its normalized JSON envelope. The adapter is vendored inside this skill at `lib/` so the installed skill directory is self-contained; if it is missing, stop and report the missing adapter instead of improvising with `herdr`/`hc` commands directly. If the adapter reports `runtime: "unknown"`, stop and report the detection error; never fall back to another host's command path. `herdr-tui` uses `herdr`; `herdr-desktop` uses `herdr-app` for window-side commands and `hc` for terminal/agent operations; `outside` performs no host commands.
 7. Parse workspace/pane/terminal IDs only from the runtime adapter's structured result; never derive them from examples or sidebar ordering. Use non-focusing/background operations where the selected adapter supports them.
 8. Worktree enforcement (HARD RULE): ALL implementation MUST happen inside a git worktree on a branch named `<issue-key>` created off the default branch. NEVER read, edit, stage, or run any implementation step in the main repository checkout or on `main`/`master`. This applies even when `HERDR_ENV` is unset, when the user says "just do it here", or when worktree creation fails — in those cases you stop and report instead of falling back to the main checkout. This rule exists so multiple agents can work on issues in parallel; violating it breaks every other in-flight issue.
 9. Before the first implementation step, and again after any `cd` or checkout, verify Rule 7 with the Worktree gate below. The gate is a stop condition, not a suggestion.
@@ -44,10 +44,10 @@ Run both checks; every later step of this skill runs only after both succeed:
 If a check fails, fix it before continuing:
 
 - Check 1 fails (you are in the main checkout): create the worktree under `${HOME}/projects/worktrees/<repo-name>/<issue-key>`, then `cd` into it and re-run the gate.
-      - Invoke `bash <skill-directory>/../lib/host-runtime detect`; if `unknown`, stop and report.
-      - If `herdr-tui` or `herdr-desktop`: run `bash <skill-directory>/../lib/host-runtime worktree-create --issue <issue-key> --base <base-branch>`, then `cd` into `worktree_path` from the envelope.
-      - If `outside`: resolve the default branch with `git symbolic-ref refs/remotes/origin/HEAD` (strip the remote prefix; fall back to `main` only after confirming with the user), `git fetch origin`, then run `bash <skill-directory>/../lib/host-runtime worktree-create --issue <issue-key> --base <default-branch>` and `cd` into `worktree_path` from the envelope. When worktrunk (`wt`) is installed the adapter creates the worktree through `wt switch --create` (honoring its path template); otherwise it falls back to plain `git worktree add`.
-- Check 2 fails but check 1 passes: locate the worktree for branch `<issue-key>` with `bash <skill-directory>/../lib/host-runtime worktree-lookup --issue <issue-key>` or `git worktree list --porcelain`, `cd` into it, and re-run the gate. If no such worktree exists, treat it as check 1 failing.
+      - Invoke `bash <skill-directory>/lib/host-runtime detect`; if `unknown`, stop and report.
+      - If `herdr-tui` or `herdr-desktop`: run `bash <skill-directory>/lib/host-runtime worktree-create --issue <issue-key> --base <base-branch>`, then `cd` into `worktree_path` from the envelope.
+      - If `outside`: resolve the default branch with `git symbolic-ref refs/remotes/origin/HEAD` (strip the remote prefix; fall back to `main` only after confirming with the user), `git fetch origin`, then run `bash <skill-directory>/lib/host-runtime worktree-create --issue <issue-key> --base <default-branch>` and `cd` into `worktree_path` from the envelope. When worktrunk (`wt`) is installed the adapter creates the worktree through `wt switch --create` (honoring its path template); otherwise it falls back to plain `git worktree add`.
+- Check 2 fails but check 1 passes: locate the worktree for branch `<issue-key>` with `bash <skill-directory>/lib/host-runtime worktree-lookup --issue <issue-key>` or `git worktree list --porcelain`, `cd` into it, and re-run the gate. If no such worktree exists, treat it as check 1 failing.
 - Wrong-name mismatch: IF an existing worktree or branch for this issue was created under the bare issue key (e.g. `KP` instead of `KP-3`), do NOT reuse, rename, or delete it silently — report the mismatch to the user and stop for their decision.
 - Worktree creation fails: stop and report the error to the user. NEVER continue implementing in the main checkout as a fallback.
 
@@ -108,21 +108,21 @@ Use this workflow to bootstrap the implementation environment automatically, rep
 1. Create the worktree workspace named by the issue ID, without stealing focus. For issue KP-3 in repo `skills` this is literally `--branch KP-3 --label KP-3` — never `--branch KP`. The adapter uses `wt switch --create` (worktrunk, honoring its path template) when `wt` is installed, `herdr worktree create` under herdr-tui, and plain `git worktree add` otherwise:
 
    ```bash
-   bash <skill-directory>/../lib/host-runtime worktree-create --issue <issue-key> --base <base-branch>
+   bash <skill-directory>/lib/host-runtime worktree-create --issue <issue-key> --base <base-branch>
    ```
 
    Read the workspace ID and pane ID from the JSON result. On failure, report the error to the user and stop — do not start the agent, and do not implement the issue yourself.
 2. Start the pi coding agent in the worktree workspace's shell pane, running the same command you would run manually — `pi -a '/approval-mode act'` — expressed through herdr as:
 
    ```bash
-   bash <skill-directory>/../lib/host-runtime agent-start --issue <issue-key> --args "pi -a '/approval-mode act'"
+   bash <skill-directory>/lib/host-runtime agent-start --issue <issue-key> --args "pi -a '/approval-mode act'"
    ```
 
    The pane ID comes from step 1. Choose a unique agent name matching `[a-z][a-z0-9_-]{0,31}`. On failure, report the error and leave the workspace for manual inspection.
 3. Deliver the issue prompt to the agent so it starts working in the new session:
 
    ```bash
-   bash <skill-directory>/../lib/host-runtime agent-prompt --issue <issue-key> --text "/skill:kp-issue-start <issue-key>"
+   bash <skill-directory>/lib/host-runtime agent-prompt --issue <issue-key> --text "/skill:kp-issue-start <issue-key>"
    ```
 
    Optionally pass `--wait` to wait only until the agent settles after its first turn — never wait for the whole implementation.

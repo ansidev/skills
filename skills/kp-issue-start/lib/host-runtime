@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -o pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/host-runtime.sh"
+[[ $# -gt 0 ]] || { hr_fail unknown detect INVALID_ARGS "usage: host-runtime <operation> [options]"; exit 1; }
+op="$1"; shift
+hr_run "$op" "$@"
