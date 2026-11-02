@@ -43,3 +43,6 @@ writing-skills/
 # Others
 .history/
 .DS_Store
+
+# Python cache
+__pycache__/
