@@ -22,6 +22,8 @@ Use this skill when the user asks to fix, correct, or resolve an issue in the ka
 8. Worktree enforcement (HARD RULE): ALL implementation MUST happen inside a git worktree on a branch named `<issue-key>` created off the default branch. NEVER read, edit, stage, or run any implementation step in the main repository checkout or on `main`/`master`. This applies even when `HERDR_ENV` is unset, when the user says "just do it here", or when worktree creation fails — in those cases you stop and report instead of falling back to the main checkout. This rule exists so multiple agents can work on issues in parallel; violating it breaks every other in-flight issue.
 9. Before the first implementation step, and again after any `cd` or checkout, verify Rule 7 with the Worktree gate below. The gate is a stop condition, not a suggestion.
 10. Naming (HARD RULE): the worktree folder name, git branch name, and herdr workspace label MUST all be exactly the issue key `<issue-key>` (e.g. `KP-3`). NEVER use the bare project prefix (e.g. `KP`) as the worktree, branch, or label name; the project prefix drops the issue number and collides across issues of the same project.
+11. Completion enforcement (HARD RULE): This skill MUST NOT return until implementation is complete, validation is run, and the issue status is changed to `in-review`. Stopping after posting a requirements comment, after Phase 1 of spec-driven-development, or before actual implementation is a violation. The skill drives the FULL workflow: assign → worktree gate → skill selection → spec-driven-development (all 3 phases) → implementation → validation → commit → status update.
+12. Kanpal error handling: When kanpal tools return validation errors (e.g., "assign the issue to someone before this transition"), diagnose the specific constraint, address it (e.g., assign before status transition), then retry the original operation. Do not repeatedly retry the same failing operation without addressing the root cause.
 
 ## Worktree gate (MUST pass before any implementation)
 
@@ -61,23 +63,41 @@ Before implementing:
 1. Understand the task, affected components, framework, and acceptance criteria.
 2. Discover available skills from the global and project skill directories your agent is configured with.
 3. Read each candidate skill's name and description to judge relevance.
-4. Load the complete instructions of every applicable skill before doing the work; load more later when new requirements or details make them relevant.
+4. Load the complete instructions of EVERY applicable skill before doing the work; load more later when new requirements or details make them relevant.
 5. Follow all mandatory skills. If several apply, combine them; resolve conflicts using project rules, then explicit user requirements.
 6. Prefer the smallest sufficient set. Do not load unrelated skills, and never claim a skill was applied unless you read and followed its instructions.
 7. If the task is ambiguous, inspect the codebase first; ask for clarification only when necessary.
 8. Before finishing, run the validation procedures required by the selected skills.
 
+**MANDATORY**: You MUST complete the skill selection policy BEFORE calling `spec-driven-development`. Do not skip this step or assume no other skills apply.
+
 ## Instructions
 
 1. Input is a issue key.
 2. Use tool `kanpal_get_issue` to retrieve the issue details with the resolved issue key. If the issue is not found, return a message indicating that the issue does not exist.
-3. If the issue status is `todo`, use tool `kanpal_update_issue` to change the status to `in-progress` and team to `agent`. Otherwise, if the issue status is `in-progress`, continue to the next step. If the issue status is done, return a message indicating that the issue has already been resolved.
-4. Self-assign if unassigned: if the issue (from `kanpal_get_issue`) has no assignee, assign it to yourself with `kanpal_assign_issue` (`{"id":"<issue-id>","user_id":"<your-user-id>"}`). Resolve `<your-user-id>` by calling `kanpal_get_me` (no parameters), which returns the connected agent's record; use its `id` field (an agent's id is also its user id). NEVER ask the user who the assignee is. If the issue is already assigned (to anyone, including you), leave the assignee unchanged. If `kanpal_get_me` fails or the assignment is refused (archived agent, outside the project's team), report it to the user and continue without reassigning anyone else.
+3. Self-assign if unassigned (MUST come before status transition): if the issue (from `kanpal_get_issue`) has no assignee, assign it to yourself with `kanpal_assign_issue` (`{"id":"<issue-id>","user_id":"<your-user-id>"}`). Resolve `<your-user-id>` by calling `kanpal_get_me` (no parameters), which returns the connected agent's record; use its `id` field (an agent's id is also its user id). NEVER ask the user who the assignee is. If the issue is already assigned (to anyone, including you), leave the assignee unchanged. If `kanpal_get_me` fails or the assignment is refused (archived agent, outside the project's team), report it to the user and continue without reassigning anyone else.
+4. If the issue status is `todo`, use tool `kanpal_update_issue` to change the status to `in-progress` and team to `agent`. The kanpal system requires the issue to be assigned (step 3) before this transition can succeed. Otherwise, if the issue status is `in-progress`, continue to the next step. If the issue status is done, return a message indicating that the issue has already been resolved.
 5. If the Herdr check `test "${HERDR_ENV:-}" = 1` passes AND the user asked to start the issue from inside Herdr AND the Worktree gate does NOT pass yet (i.e., you are not already the agent running inside the issue's worktree), run the Herdr automation workflow below. If the gate already passes, you ARE the spawned agent: skip the automation and continue with step 6.
 6. Run the Worktree gate for issue branch `<issue-key>` (see above). This step MUST pass before any implementation step. All remaining steps run inside the worktree directory.
 7. Important: Apply the Skill selection policy above to pick the skills for this issue, then MUST use skill `spec-driven-development` (always-on) alongside them to create a solution for the issue.
-8. Important rule: The output of phase 1 of the `spec-driven-development` skill (`Requirements Gathering`) MUST be updated back to the respective kanpal issue comments alongside the skill behaviour.
-9. Additional steps as needed by the `spec-driven-development` skill to complete the solution.
+
+   **CRITICAL**: Using `spec-driven-development` means FULLY executing all three phases:
+   - Phase 1: Requirements Gathering (user stories, acceptance criteria in EARS format)
+   - Phase 2: Design Documentation (architecture, components, data models, error handling)
+   - Phase 3: Task Planning (break design into actionable implementation tasks)
+
+   Do NOT skip phases, do NOT substitute manual notes for the skill's systematic process, and do NOT stop after posting a requirements comment. Continue through all phases and implement the tasks.
+
+8. Important rule: The output of phase 1 of the `spec-driven-development` skill (`Requirements Gathering`) MUST be updated back to the respective kanpal issue comments alongside the skill behaviour. This comment is PART of phase 1, not a replacement for the full skill execution.
+
+9. Execute the complete `spec-driven-development` workflow:
+   - Phase 1: Gather requirements using the skill's EARS format process
+   - Post Phase 1 output to kanpal issue comments
+   - Phase 2: Create design documentation per the skill's structure
+   - Phase 3: Break down into implementation tasks per the skill's task planning
+   - Implement the tasks in sequence, following task dependencies
+   - Apply any additional task-specific skills selected in step 7
+
 10. When the implementation finishes, run the validation procedures required by the selected skills, then change the issue status to `in-review`; commit exactly the issue-relevant changes without pushing. First confirm with `git rev-parse --show-toplevel` that you are committing inside the issue worktree, not the main checkout.
 
 ## Herdr automation workflow (only when `HERDR_ENV=1` and not already inside the issue worktree)
