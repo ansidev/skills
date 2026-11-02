@@ -44,10 +44,9 @@ Run both checks; every later step of this skill runs only after both succeed:
 If a check fails, fix it before continuing:
 
 - Check 1 fails (you are in the main checkout): create the worktree under `${HOME}/projects/worktrees/<repo-name>/<issue-key>`, then `cd` into it and re-run the gate.
-   - Inside the issue's worktree? (handle via adapter) create the worktree under `${HOME}/projects/worktrees/<repo-name>/<issue-key>`, then `cd` into it and re-run the gate.
       - Invoke `bash <skill-directory>/../lib/host-runtime detect`; if `unknown`, stop and report.
       - If `herdr-tui` or `herdr-desktop`: run `bash <skill-directory>/../lib/host-runtime worktree-create --issue <issue-key> --base <base-branch>`, then `cd` into `worktree_path` from the envelope.
-      - If `outside`: resolve the default branch with `git symbolic-ref refs/remotes/origin/HEAD` (strip the remote prefix; fall back to `main` only after confirming with the user), ensure `${HOME}/projects/worktrees/<repo-name>` exists (`mkdir -p ...`), then `git fetch origin && git worktree add "${HOME}/projects/worktrees/<repo-name>/<issue-key>" -b <issue-key> <default-branch> && cd "${HOME}/projects/worktrees/<repo-name>/<issue-key>"`.
+      - If `outside`: resolve the default branch with `git symbolic-ref refs/remotes/origin/HEAD` (strip the remote prefix; fall back to `main` only after confirming with the user), `git fetch origin`, then run `bash <skill-directory>/../lib/host-runtime worktree-create --issue <issue-key> --base <default-branch>` and `cd` into `worktree_path` from the envelope. When worktrunk (`wt`) is installed the adapter creates the worktree through `wt switch --create` (honoring its path template); otherwise it falls back to plain `git worktree add`.
 - Check 2 fails but check 1 passes: locate the worktree for branch `<issue-key>` with `bash <skill-directory>/../lib/host-runtime worktree-lookup --issue <issue-key>` or `git worktree list --porcelain`, `cd` into it, and re-run the gate. If no such worktree exists, treat it as check 1 failing.
 - Wrong-name mismatch: IF an existing worktree or branch for this issue was created under the bare issue key (e.g. `KP` instead of `KP-3`), do NOT reuse, rename, or delete it silently — report the mismatch to the user and stop for their decision.
 - Worktree creation fails: stop and report the error to the user. NEVER continue implementing in the main checkout as a fallback.
@@ -106,10 +105,10 @@ Before implementing:
 
 Use this workflow to bootstrap the implementation environment automatically, replacing the manual steps (create worktree workspace → start pi agent → send the prompt).
 
-1. Create the worktree workspace named by the issue ID under `${HOME}/projects/worktrees/<repo-name>`, without stealing focus. For issue KP-3 in repo `skills` this is literally `--branch KP-3 --label KP-3` — never `--branch KP`:
+1. Create the worktree workspace named by the issue ID, without stealing focus. For issue KP-3 in repo `skills` this is literally `--branch KP-3 --label KP-3` — never `--branch KP`. The adapter uses `wt switch --create` (worktrunk, honoring its path template) when `wt` is installed, `herdr worktree create` under herdr-tui, and plain `git worktree add` otherwise:
 
    ```bash
-   mkdir -p "${HOME}/projects/worktrees/<repo-name>" && bash <skill-directory>/../lib/host-runtime worktree-create --issue <issue-key> --base <base-branch>
+   bash <skill-directory>/../lib/host-runtime worktree-create --issue <issue-key> --base <base-branch>
    ```
 
    Read the workspace ID and pane ID from the JSON result. On failure, report the error to the user and stop — do not start the agent, and do not implement the issue yourself.

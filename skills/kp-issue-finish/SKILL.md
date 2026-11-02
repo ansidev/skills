@@ -48,7 +48,7 @@ Do NOT commit, rebase, or merge the issue worktree branch, and do NOT add knowle
 
 1. Call tool `kanpal_get_issue` with `{"key": "<issue-key>"}`. If the issue is not found, stop and say so. Read `id` from the result (<issue-id>).
 2. Update the issue status: call `kanpal_update_issue` with `{"id": "<issue-id>", "status": "cancelled"}`. If the call fails, stop and report the failure; do not clean up.
-3. Clean up the host agent (if any): run `bash <skill-directory>/../lib/host-runtime workspace-close --issue <issue-key>` (best-effort; report any `RUNTIME_UNSUPPORTED`/`NO_HOST_AGENT` error but do not stop). Then clean up the git worktree and branch with forced removal (Cancel workflow only, by design): `(cd <main-checkout> && git worktree remove --force <worktree-path> && git branch -D <issue-key>)`. Run from the main checkout, never inside the worktree being removed. Only touch paths named `<issue-key>`.
+3. Clean up the host agent (if any): run `bash <skill-directory>/../lib/host-runtime workspace-close --issue <issue-key>` (best-effort; report any `RUNTIME_UNSUPPORTED`/`NO_HOST_AGENT` error but do not stop). Then clean up the git worktree and branch (Cancel workflow only, forced by design): `(cd <main-checkout> && bash <skill-directory>/../lib/host-runtime worktree-remove --issue <issue-key> --force)`. The adapter uses `wt remove` when worktrunk is installed, plain `git worktree remove` + `git branch -D` otherwise. Run from the main checkout, never inside the worktree being removed. Only touch paths named `<issue-key>`.
 4. Report to the user what you have done as a checklist.
 
 ## Merge workflow (`--cancel` not given)
@@ -85,7 +85,7 @@ The skill may be started from ANY directory (main checkout, the worktree, or els
 5. Git cleanup (never gated on the Herdr check; use `git -C <main-checkout>` so the removal never targets a directory you are inside):
    1. Use `<worktree-path>` from step 1.2 (re-run `git -C <main-checkout> worktree list --porcelain` if unsure; if it is no longer listed, it was already removed).
    2. If it still exists, run `git -C <worktree-path> status --porcelain`. If not empty, stop and ask the user before deleting anything.
-   3. Remove it with `git -C <main-checkout> worktree remove <worktree-path>` (never `--force`). If the path no longer exists, report it as already removed and continue.
+   3. Remove it with `bash <skill-directory>/../lib/host-runtime worktree-remove --issue <issue-key>` (no `--force`; the adapter uses `wt remove` when worktrunk is installed, plain `git worktree remove` + `git branch -D` otherwise). If the adapter reports `WORKTREE_NOT_FOUND`, report it as already removed and continue.
    4. Delete the branch with `git -C <main-checkout> branch -d <issue-key>` (never `-D`). If git refuses because it is not fully merged, stop and ask the user. If the branch does not exist, report it as already deleted and continue.
    5. Only touch the worktree and branch named `<issue-key>`.
 6. Add knowledge: use skill `add-knowledge` to record knowledge related to this issue in the OpenKnowledge base (via the `kb-okf` MCP). Prefer updating an existing document; create a new one only when appropriate. Issue notes live at the content-dir-relative path `projects/kanpal/<issue-key-lowercase>-<slug>` (on disk `knowledge/projects/kanpal/...`). NEVER write the path as `knowledge/projects/...` or `knowledge/knowledge/...`, and do not copy the location of an existing misplaced note. If this step fails, warn, continue, and mention it in the report.

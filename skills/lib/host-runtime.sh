@@ -47,12 +47,31 @@ hr_repo_name() {
 hr_worktree_root() { printf '%s' "${HR_WORKTREE_ROOT:-${HOME}/projects/worktrees}"; }
 
 hr_git_worktree_create() {
-  local issue="$1" base="$2" repo path out
+  local issue="$1" base="$2" repo out
   repo=$(hr_repo_name "${3:-}") || { hr_fail "$HR_RUNTIME" worktree-create WORKTREE_CREATE_FAILED "cannot resolve repo name; pass --repo"; return; }
+  if command -v wt >/dev/null 2>&1; then
+    hr_wt_worktree_create "$issue" "$base"
+    return
+  fi
+  local path
   path="$(hr_worktree_root)/$repo/$issue"
   mkdir -p "$(hr_worktree_root)/$repo"
   if ! out=$(git worktree add "$path" -b "$issue" "$base" 2>&1); then
     hr_fail "$HR_RUNTIME" worktree-create WORKTREE_CREATE_FAILED "git worktree add failed: $out"; return
+  fi
+  hr_ok "$HR_RUNTIME" worktree-create "{\"worktree_path\":\"$path\",\"branch\":\"$issue\",\"base\":\"$base\"}"
+}
+
+# Worktrunk: path template resolves via wt's own config; look the path back up
+# from its JSON output instead of assuming ~/projects/worktrees/<repo>/<issue>.
+hr_wt_worktree_create() {
+  local issue="$1" base="$2" out path
+  if ! out=$(wt switch --create "$issue" --base "$base" --no-cd --no-hooks --format json -y 2>&1); then
+    hr_fail "$HR_RUNTIME" worktree-create WORKTREE_CREATE_FAILED "wt switch failed: $out"; return
+  fi
+  path=$(printf '%s\n' "$out" | sed -n 's/.*"path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
+  if [[ -z "$path" ]]; then
+    hr_fail "$HR_RUNTIME" worktree-create WORKTREE_CREATE_FAILED "wt switch returned no path: $out"; return
   fi
   hr_ok "$HR_RUNTIME" worktree-create "{\"worktree_path\":\"$path\",\"branch\":\"$issue\",\"base\":\"$base\"}"
 }
@@ -83,7 +102,19 @@ hr_worktree_create_outside() {
 
 hr_git_worktree_lookup() {
   local issue="$1" path
-  path=$(git worktree list --porcelain 2>&1 | awk -v I="refs/heads/$issue" '
+  if command -v wt >/dev/null 2>&1; then
+    path=$(wt list --branches --format json 2>/dev/null | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for i in d.get("items", []):
+    if i.get("branch") == sys.argv[1] and i.get("worktree"):
+        print(i["worktree"]["path"])
+' "$issue" 2>/dev/null)
+  fi
+  [[ -n "$path" ]] || path=$(git worktree list --porcelain 2>/dev/null | awk -v I="refs/heads/$issue" '
     /^worktree / { p=substr($0,10) }
     /^branch / { if ($2==I) { print p; exit 0 } }
   ')
@@ -107,11 +138,16 @@ hr_worktree_lookup_tui() {
 }
 
 hr_git_worktree_path_tui() {
-  local issue="$1"
-  git worktree list --porcelain 2>/dev/null | awk -v I="refs/heads/$issue" '
+  local issue="$1" path=""
+  if command -v wt >/dev/null 2>&1; then
+    hr_git_worktree_lookup "$issue" >/dev/null 2>&1 && path=$(hr_git_worktree_lookup "$issue" 2>/dev/null | sed -n 's/.*"worktree_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+  fi
+  [[ -n "$path" ]] || path=$(git worktree list --porcelain 2>/dev/null | awk -v I="refs/heads/$issue" '
     /^worktree / { p=substr($0,10) }
     /^branch / { if ($2==I) { print p; exit 0 } }
-  '
+  ')
+  [[ -n "$path" ]] || return 1
+  printf '%s\n' "$path"
 }
 
 hr_worktree_lookup_desktop() { hr_git_worktree_lookup "$@"; }
@@ -181,9 +217,36 @@ hr_workspace_close_desktop() {
   hr_ok herdr-desktop workspace-close "{\"closed\":$closed,\"label\":\"herdr.issue=$issue\"}"
 }
 
+# Worktree/branch cleanup: worktrunk when available (it reaps background
+# processes and deletes merged branches safely), plain git otherwise.
+hr_git_worktree_remove() {
+  local issue="$1" force="${2:-false}" path
+  path=$(hr_git_worktree_lookup "$issue" 2>/dev/null | sed -n 's/.*"worktree_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+  if [[ -z "$path" ]]; then
+    hr_ok "$HR_RUNTIME" worktree-remove "{\"removed\":0,\"note\":\"no worktree on branch $issue\"}"
+    return
+  fi
+  if command -v wt >/dev/null 2>&1; then
+    local wt_flags=()
+    [[ "$force" == true ]] && wt_flags+=(--force)
+    if ! out=$(wt remove "$issue" "${wt_flags[@]}" -y 2>&1); then
+      hr_fail "$HR_RUNTIME" worktree-remove WORKTREE_REMOVE_FAILED "wt remove failed: $out"; return
+    fi
+    hr_ok "$HR_RUNTIME" worktree-remove "{\"removed\":1,\"worktree_path\":\"$path\"}"
+    return
+  fi
+  local git_flags=()
+  [[ "$force" == true ]] && git_flags+=(--force)
+  if ! out=$(git worktree remove "${git_flags[@]}" "$path" 2>&1); then
+    hr_fail "$HR_RUNTIME" worktree-remove WORKTREE_REMOVE_FAILED "git worktree remove failed: $out"; return
+  fi
+  git branch -D "$issue" >/dev/null 2>&1
+  hr_ok "$HR_RUNTIME" worktree-remove "{\"removed\":1,\"worktree_path\":\"$path\"}"
+}
+
 hr_run() {
   local op="$1"; shift
-  local issue="" text="" args="" workspace="" base="" repo="" focus=""
+  local issue="" text="" args="" workspace="" base="" repo="" focus="" force=""
   while (($#)); do
     case "$1" in
       --issue) issue="$2"; shift 2 ;;
@@ -193,6 +256,7 @@ hr_run() {
       --base) base="$2"; shift 2 ;;
       --repo) repo="$2"; shift 2 ;;
       --focus) focus="$2"; shift 2 ;;
+      --force) force=true; shift ;;
       *) hr_fail unknown "$op" INVALID_ARGS "unknown option $1"; return ;;
     esac
   done
@@ -215,6 +279,9 @@ hr_run() {
     worktree-lookup)
       [[ -n "$issue" ]] || { hr_fail "$runtime" "$op" INVALID_ARGS "--issue is required"; return; }
       case "$runtime" in herdr-tui) hr_worktree_lookup_tui "$issue" ;; herdr-desktop|outside) hr_git_worktree_lookup "$issue" ;; esac ;;
+    worktree-remove)
+      [[ -n "$issue" ]] || { hr_fail "$runtime" "$op" INVALID_ARGS "--issue is required"; return; }
+      case "$runtime" in herdr-tui) hr_fail herdr-tui worktree-remove RUNTIME_UNSUPPORTED "close the Herdr workspace instead; use wt remove / git worktree remove directly" ;; herdr-desktop|outside) hr_git_worktree_remove "$issue" "${force:-false}" ;; esac ;;
     workspace-close)
       [[ -n "$issue" ]] || { hr_fail "$runtime" "$op" INVALID_ARGS "--issue is required"; return; }
       case "$runtime" in herdr-desktop) hr_workspace_close_desktop "$issue" ;; outside) hr_ok outside workspace-close '{"closed":0,"note":"outside host: nothing to close"}' ;; herdr-tui) hr_workspace_close_tui "$issue" ;; esac ;;

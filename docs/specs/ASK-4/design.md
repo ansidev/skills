@@ -14,7 +14,8 @@ ASK-3 shipped the shared boundary (`skills/lib/host-runtime.sh`, CLI entry point
 
 - `worktree-create --issue <key> --base <branch> [--repo <path>] [--focus true|false]`
   - `herdr-tui`: `herdr worktree create --branch <key> --label <key> --path <root>/<repo>/<key> [--no-focus]`, workspace id parsed from JSON. Default focus=false.
-  - `herdr-desktop` / `outside`: git-native `git worktree add <root>/<repo>/<key> -b <key> <base>`; repo name from the git common dir's parent when `--repo` is omitted. Base branch is caller-supplied, never inferred.
+  - `herdr-desktop` / `outside`: git-native `git worktree add <root>/<repo>/<key> -b <key> <base>`; repo name from the git common dir's parent when `--repo` is omitted. Base branch is caller-supplied, never inferred. When worktrunk (`wt`) is on PATH, the create/remove/lookup ops go through `wt switch --create` / `wt remove` / `wt list --branches --format json` instead (wt's own path template wins; `--no-cd --no-hooks -y` keeps it non-interactive and focus-free), falling back to plain git when `wt` fails.
+  - `worktree-remove --issue <key> [--force]`: worktrunk `wt remove` (or `git worktree remove` + `git branch -D` without wt); refused on herdr-tui (`RUNTIME_UNSUPPORTED` — close the Herdr workspace instead).
   - Worktree root overridable via `HR_WORKTREE_ROOT` (test hook), default `~/projects/worktrees`.
 - `worktree-lookup --issue <key> [--repo <path>]`
   - `herdr-tui`: `herdr workspace list` matched against `git worktree list --porcelain` by checkout path → `{"worktree_path", "workspace_id"}` (workspace_id may be empty when no workspace matches).
