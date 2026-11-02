@@ -38,7 +38,12 @@ hr_address() { sed -n 's/.*"address"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
 
 hr_repo_name() {
   local repo="${1:-}"
-  if [[ -n "$repo" ]]; then printf '%s\n' "$repo"; return 0; fi
+  if [[ -n "$repo" ]]; then
+    # Accept either a bare repo name or a repo path; the name is the leaf.
+    repo="${repo%/}"
+    printf '%s\n' "${repo##*/}"
+    return 0
+  fi
   local common_dir
   common_dir=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 1
   printf '%s\n' "$(basename "${common_dir%/.git}")"
@@ -131,7 +136,7 @@ hr_worktree_lookup_tui() {
       local wid wpath
       wid=$(printf '%s' "$line" | sed -n 's/.*"workspace_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
       wpath=$(printf '%s' "$line" | sed -n 's/.*"worktree_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-      if [[ -n "$wid" && "$wpath" == "$wt_path" ]]; then workspace_id="$wid"; break; fi
+      if [[ -n "$wid" && "$wpath" == "$wt_path" ]]; then workspace_id="\"$wid\""; break; fi
     done <<< "$workspaces"
   fi
   hr_ok herdr-tui worktree-lookup "{\"worktree_path\":\"$wt_path\",\"workspace_id\":$workspace_id}"

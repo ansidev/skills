@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../../lib/host-runtime.sh"
 
 case "${1:-}" in
-  detect|worktree-create|worktree-lookup|agent-start|agent-prompt|workspace-close)
+  detect|worktree-create|worktree-lookup|worktree-remove|agent-start|agent-prompt|workspace-close)
     op="$1"; shift
     hr_run "$op" "$@"
     ;;

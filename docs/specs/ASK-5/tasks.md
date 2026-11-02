@@ -1,0 +1,23 @@
+# ASK-5 — Tasks
+
+- [x] 1. Hermetic test foundation
+  - [x] 1.1 `tests/test_host_runtime.py`: explicit per-test env (scrub `HERDR_ENV`, controlled PATH, `HR_WORKTREE_ROOT`), fixture-repo helper
+  - _Requirements: 1, 5, 9_
+- [x] 2. Contract test expansion (`tests/test_host_runtime.py`)
+  - [x] 2.1 Detection matrix incl. both ambiguous-state `DETECT_FAILED` paths
+  - [x] 2.2 Worktree create/lookup/remove under desktop + outside on a fixture repo (branch name, path layout, `--force`)
+  - [x] 2.3 Worktree ops under herdr-tui: exact commands from call log, focus flag, `--repo` override, missing-repo failure, `RUNTIME_UNSUPPORTED` for remove
+  - [x] 2.4 Agent lifecycle + close under desktop and TUI with exact-argument call-log assertions and issue scoping (decoy resources untouched)
+  - [x] 2.5 Envelope contract + `INVALID_ARGS` for unknown op/option; skill routing assertions
+  - _Requirements: 2, 3, 4, 6, 7, 8_
+- [x] 3. Behavior tests (`tests/test_issue_skills.py`)
+  - [x] 3.1 kp-issue-new routing assertions (no host commands, delegation to kp-issue-start)
+  - [x] 3.2 kp-issue-start success + failure paths across outside/herdr-tui via `script.sh`
+  - [x] 3.3 kp-issue-finish close/remove behavior across outside/herdr-tui
+  - _Requirements: 2, 3, 4, 6_
+- [x] 4. Adapter-contract documentation
+  - [x] 4.1 `docs/host-runtime.md`: detection, envelope, op×runtime command tables, capabilities matrix, error codes, add-a-new-host procedure
+  - _Requirements: 10, 11_
+- [ ] 5. Validation and handoff
+  - [ ] 5.1 Full suite passes from a plain shell and a `HERDR_ENV=1` shell; commit issue-relevant files; set issue to `in-review`
+  - _Requirements: 9_

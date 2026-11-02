@@ -19,7 +19,15 @@ class HostRuntimeContractTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.bin = Path(self.temp.name) / "bin"
         self.bin.mkdir()
-        self.base_env = os.environ | {"PATH": f"{self.bin}:/usr/bin:/bin", "HR_WORKTREE_ROOT": str(Path(self.temp.name) / "worktrees")}
+        # Hermetic by construction: the invoking shell's HERDR_ENV, PATH, and
+        # live host binaries must never influence detection under test.
+        env = os.environ.copy()
+        env.pop("HERDR_ENV", None)
+        self.base_env = env | {
+            "PATH": f"{self.bin}:/usr/bin:/bin",
+            "HR_WORKTREE_ROOT": str(Path(self.temp.name) / "worktrees"),
+        }
+        self.worktree_root = Path(self.temp.name) / "worktrees"
 
     def tearDown(self) -> None:
         self.temp.cleanup()
@@ -29,17 +37,32 @@ class HostRuntimeContractTests(unittest.TestCase):
         path.write_text(f"#!/usr/bin/env bash\n{body}\n")
         path.chmod(0o755)
 
-    def run_cli(self, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    def fixture_repo(self) -> Path:
+        """A small real git repo (one commit on main) for worktree ops."""
+        repo = Path(self.temp.name) / "fixture-repo"
+        repo.mkdir()
+        for cmd in (
+            ["git", "init", "-b", "main", str(repo)],
+            ["git", "-C", str(repo), "config", "user.email", "t@example.com"],
+            ["git", "-C", str(repo), "config", "commit.gpgsign", "false"],
+            ["git", "-C", str(repo), "config", "user.name", "t"],
+            ["git", "-C", str(repo), "commit", "--allow-empty", "-m", "seed"],
+        ):
+            subprocess.run(cmd, check=True, capture_output=True)
+        return repo
+
+    def run_cli(self, *args: str, env: dict[str, str] | None = None, cwd: str | None = None) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [str(CLI), *args],
             text=True,
             capture_output=True,
             env=env or self.base_env,
+            cwd=cwd,
             check=False,
         )
 
-    def result(self, *args: str, env: dict[str, str] | None = None) -> tuple[subprocess.CompletedProcess[str], dict]:
-        completed = self.run_cli(*args, env=env)
+    def result(self, *args: str, env: dict[str, str] | None = None, cwd: str | None = None) -> tuple[subprocess.CompletedProcess[str], dict]:
+        completed = self.run_cli(*args, env=env, cwd=cwd)
         return completed, json.loads(completed.stdout)
 
     def test_detects_outside_when_no_host_signals_exist(self) -> None:
@@ -76,6 +99,155 @@ class HostRuntimeContractTests(unittest.TestCase):
         self.assertEqual(result["runtime"], "unknown")
         self.assertEqual(result["error"]["code"], "DETECT_FAILED")
         self.assertIn("hc", result["error"]["message"])
+
+    def test_desktop_with_missing_hc_is_an_actionable_error(self) -> None:
+        self.stub("herdr-app", 'exit 0')
+        completed, result = self.result("detect")
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertEqual(result["error"]["code"], "DETECT_FAILED")
+
+    def test_invoking_shell_environment_never_leaks_into_detection(self) -> None:
+        # A polluted caller environment must not flip the outcome either way.
+        polluted = self.base_env | {"HERDR_ENV": "1"}
+        completed, result = self.result("detect", env=polluted)
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertEqual(result["error"]["code"], "DETECT_FAILED")
+
+    # ------------------------------------------------------------------
+    # Worktree lifecycle (desktop / outside): real git ops on a fixture repo
+    # ------------------------------------------------------------------
+
+    def test_outside_worktree_lifecycle_creates_isolated_issue_worktree(self) -> None:
+        repo = self.fixture_repo()
+        _, created = self.result(
+            "worktree-create", "--issue", "ASK-5", "--base", "main",
+            "--repo", str(repo), cwd=str(repo),
+        )
+        self.assertTrue(created["ok"])
+        expected = self.worktree_root / repo.name / "ASK-5"
+        self.assertEqual(Path(created["data"]["worktree_path"]).resolve(), expected.resolve())
+        self.assertTrue(expected.is_dir())
+        branch = subprocess.run(
+            ["git", "-C", str(expected), "branch", "--show-current"],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        self.assertEqual(branch, "ASK-5")
+        _, lookup = self.result(
+            "worktree-lookup", "--issue", "ASK-5", "--repo", str(repo), cwd=str(repo),
+        )
+        self.assertTrue(lookup["ok"])
+        self.assertEqual(Path(lookup["data"]["worktree_path"]).resolve(), expected.resolve())
+        self.assertIsNone(lookup["data"]["workspace_id"])
+        _, removed = self.result(
+            "worktree-remove", "--issue", "ASK-5", "--repo", str(repo), cwd=str(repo),
+        )
+        self.assertTrue(removed["ok"])
+        self.assertFalse(expected.exists())
+        branches = subprocess.run(
+            ["git", "-C", str(repo), "branch", "--list", "ASK-5"],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        self.assertEqual(branches, "")
+
+    def test_outside_worktree_remove_force_handles_dirty_worktree(self) -> None:
+        repo = self.fixture_repo()
+        _, created = self.result(
+            "worktree-create", "--issue", "ASK-9", "--base", "main",
+            "--repo", str(repo), cwd=str(repo),
+        )
+        self.assertTrue(created["ok"])
+        dirty = Path(created["data"]["worktree_path"]) / "uncommitted.txt"
+        dirty.write_text("uncommitted\n")
+        completed, removed = self.result(
+            "worktree-remove", "--issue", "ASK-9", "--force", "--repo", str(repo), cwd=str(repo),
+        )
+        self.assertTrue(removed["ok"])
+        self.assertEqual(completed.returncode, 0)
+        self.assertFalse(Path(created["data"]["worktree_path"]).exists())
+
+    def test_worktree_lookup_without_worktree_fails(self) -> None:
+        repo = self.fixture_repo()
+        completed, result = self.result(
+            "worktree-lookup", "--issue", "NOPE-1", "--repo", str(repo), cwd=str(repo),
+        )
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertEqual(result["error"]["code"], "WORKTREE_NOT_FOUND")
+
+    # ------------------------------------------------------------------
+    # Worktree ops under herdr-tui: exact commands, stubbed herdr
+    # ------------------------------------------------------------------
+
+    def test_tui_worktree_create_uses_no_focus_and_issue_key_naming(self) -> None:
+        log = Path(self.temp.name) / "herdr.log"
+        self.stub("herdr", f'printf \'%s\\n\' "$*" >> "{log}"; printf \'{{"workspace_id":"w9"}}\\n\'')
+        repo = self.fixture_repo()
+        _, created = self.result(
+            "worktree-create", "--issue", "KP-7", "--base", "main",
+            "--repo", str(repo), env=self.base_env | {"HERDR_ENV": "1"},
+        )
+        self.assertTrue(created["ok"])
+        self.assertEqual(created["data"]["workspace_id"], "w9")
+        expected = self.worktree_root / repo.name / "KP-7"
+        self.assertEqual(Path(created["data"]["worktree_path"]), expected)
+        calls = log.read_text()
+        self.assertIn("worktree create --branch KP-7 --label KP-7", calls)
+        self.assertIn("--no-focus", calls)
+        self.assertIn(str(expected), calls)
+
+    def test_tui_worktree_create_focus_true_omits_no_focus_flag(self) -> None:
+        log = Path(self.temp.name) / "herdr.log"
+        self.stub("herdr", f'printf \'%s\\n\' "$*" >> "{log}"; printf \'{{"workspace_id":"w9"}}\\n\'')
+        repo = self.fixture_repo()
+        _, created = self.result(
+            "worktree-create", "--issue", "KP-7", "--base", "main",
+            "--repo", str(repo), "--focus", "true",
+            env=self.base_env | {"HERDR_ENV": "1"},
+        )
+        self.assertTrue(created["ok"])
+        self.assertNotIn("--no-focus", log.read_text())
+
+    def test_tui_worktree_create_failure_without_repo_name(self) -> None:
+        self.stub("herdr", 'exit 0')
+        workdir = Path(self.temp.name) / "not-a-repo"
+        workdir.mkdir()
+        completed, result = self.result(
+            "worktree-create", "--issue", "KP-7", "--base", "main",
+            env=self.base_env | {"HERDR_ENV": "1"}, cwd=str(workdir),
+        )
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertEqual(result["error"]["code"], "WORKTREE_CREATE_FAILED")
+
+    def test_tui_worktree_lookup_matches_workspace_by_path(self) -> None:
+        repo = self.fixture_repo()
+        self.result(
+            "worktree-create", "--issue", "KP-7", "--base", "main",
+            "--repo", str(repo), cwd=str(repo),
+        )
+        wt_path = os.path.realpath(self.worktree_root / repo.name / "KP-7")
+        self.stub(
+            "herdr",
+            f'''if test "$1 $2" = "workspace list"; then
+  printf \'{{"workspace_id":"w1","worktree_path":"/decoy/other"}}\\n\'
+  printf \'{{"workspace_id":"w2","worktree_path":"{wt_path}"}}\\n\'
+  exit 0
+fi
+exit 1''',
+        )
+        _, lookup = self.result(
+            "worktree-lookup", "--issue", "KP-7", "--repo", str(repo),
+            env=self.base_env | {"HERDR_ENV": "1"}, cwd=str(repo),
+        )
+        self.assertTrue(lookup["ok"])
+        self.assertEqual(lookup["data"]["workspace_id"], "w2")
+
+    def test_tui_worktree_remove_is_refused(self) -> None:
+        self.stub("herdr", 'exit 0')
+        completed, result = self.result(
+            "worktree-remove", "--issue", "KP-7",
+            env=self.base_env | {"HERDR_ENV": "1"},
+        )
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertEqual(result["error"]["code"], "RUNTIME_UNSUPPORTED")
 
     def test_outside_agent_launch_is_refused_without_running_a_host_command(self) -> None:
         completed, result = self.result("agent-start", "--issue", "ASK-3", "--args", "pi")
@@ -125,6 +297,13 @@ exit 1''')
             script = (ROOT / "skills" / skill / "scripts" / "script.sh").read_text()
             self.assertIn("host-runtime.sh", script, skill)
             self.assertNotIn("function wt-switch()", script, skill)
+
+    def test_no_skill_md_references_removed_host_functions(self) -> None:
+        import re
+        removed = re.compile(r"wt-switch|ws-id|wt-del|start-issue|herdr-workspace\.sh")
+        for skill in ("kp-issue-new", "kp-issue-start", "kp-issue-finish"):
+            text = (ROOT / "skills" / skill / "SKILL.md").read_text()
+            self.assertIsNone(removed.search(text), skill)
 
     def test_every_result_is_a_single_normalized_json_envelope(self) -> None:
         completed = self.run_cli("agent-prompt", "--issue", "ASK-3", "--text", "hello")
