@@ -11,7 +11,7 @@ This skill enables the creation of new issues in the Kanpal tracking system.
 ## Rules
 
 1. MUST use available tools from `kanpal` MCP.
-2. NEVER implement a issue in the main working tree. Implementation MUST happen in a separate git worktree, managed together with its herdr workspace. The worktree is created by skill `kp-issue-start`; this skill only delegates and must not create or reuse a worktree itself.
+2. NEVER implement a issue in the main working tree. Implementation MUST happen in a separate git worktree. The worktree is created by skill `kp-issue-start`; host lifecycle work is selected through `skills/lib/host-runtime`, which reports `herdr-tui`, `herdr-desktop`, `outside`, or `unknown`. An `unknown` runtime is a stop condition; it must never trigger a fallback host command.
 3. ONLY create issue, NEVER start implementation without user's confirmation.
 
 ## Inputs

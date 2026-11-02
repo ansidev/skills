@@ -36,7 +36,7 @@ Parsing rules:
 
 1. MUST use available tools from `kanpal` MCP.
 2. Follow the Cancel workflow when `--cancel` is given; otherwise follow the Merge workflow.
-3. Use skill `herdr` for all Herdr interactions. Before any `herdr` command, verify the agent runs inside Herdr with `test "${HERDR_ENV:-}" = 1`; if the check fails, skip only the Herdr workspace cleanup and tell the user — the git worktree and branch cleanup still runs.
+3. Use the shared `skills/lib/host-runtime` adapter for host lifecycle operations. It detects `herdr-tui`, `herdr-desktop`, or `outside`; an `unknown` result is a stop condition and must never cause a fallback command path. Host cleanup is skipped only for `outside`; git worktree and branch cleanup remains mandatory.
 4. NEVER set the issue status to `done` (Merge workflow) or `cancelled` (Cancel workflow) outside this skill, and never set `done` until every prior step of this skill has succeeded.
 5. NEVER force-push, force-merge, force-remove a worktree (`git worktree remove --force`), force-delete a branch (`git branch -D`), or auto-abort a rebase unless user confirms or it is defined explicitly in the skill instructions. The only such exception is the Cancel workflow, which MUST clean up with `wt-del` (it force-removes the worktree and branch by design).
 6. MUST call tool `kanpal_get_issue` with parameter `{"key": "<issue-key>"}`.
