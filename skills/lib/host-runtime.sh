@@ -142,7 +142,7 @@ hr_worktree_lookup_tui() {
   hr_ok herdr-tui worktree-lookup "{\"worktree_path\":\"$wt_path\",\"workspace_id\":$workspace_id}"
 }
 
-hr_git_worktree_path_tui() {
+hr_git_worktree_path() {
   local issue="$1" path=""
   if command -v wt >/dev/null 2>&1; then
     hr_git_worktree_lookup "$issue" >/dev/null 2>&1 && path=$(hr_git_worktree_lookup "$issue" 2>/dev/null | sed -n 's/.*"worktree_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
@@ -153,6 +153,10 @@ hr_git_worktree_path_tui() {
   ')
   [[ -n "$path" ]] || return 1
   printf '%s\n' "$path"
+}
+
+hr_git_worktree_path_tui() {
+  hr_git_worktree_path "$@"
 }
 
 hr_worktree_lookup_desktop() { hr_git_worktree_lookup "$@"; }
@@ -214,11 +218,38 @@ hr_agent_prompt_desktop() {
   hr_ok herdr-desktop agent-prompt "{\"terminal\":\"$address\"}"
 }
 
+hr_hc_terminals() { hc ls 2>/dev/null || true; }
+
+# Prints the addresses of live terminals whose cwd is the issue worktree path
+# (or a subdirectory of it), one per line. Terminals created inside the herdr
+# desktop app carry no herdr.issue label, so cwd is the only reliable match.
+hr_hc_addresses_by_cwd() {
+  local issue="$1" wt_path="${HR_LAST_WORKTREE_PATH:-}"
+  hr_hc_terminals | python3 -c '
+import json, os, sys
+issue, wt_path = sys.argv[1], sys.argv[2]
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for t in d.get("terminals", []):
+    cwd = t.get("cwd", "")
+    if cwd == wt_path or (wt_path and cwd.startswith(wt_path + os.sep)):
+        print(t.get("address", ""))
+' "$issue" "$wt_path" 2>/dev/null
+}
+
 hr_workspace_close_desktop() {
-  local issue="$1" out address closed=0
+  local issue="$1" out address closed=0 addresses
+  # 1) Terminals the skills started themselves carry the herdr.issue label.
   out=$(hc ls --label "herdr.issue=$issue" 2>&1)
   address=$(printf '%s\n' "$out" | hr_address)
   if [[ -n "$address" ]] && hc kill "$address" >/dev/null 2>&1; then closed=1; fi
+  # 2) Terminals opened inside the desktop app on the issue worktree: no label,
+  #    match by cwd. Kill every remaining live one.
+  for address in $(hr_hc_addresses_by_cwd "$issue"); do
+    if hc kill "$address" >/dev/null 2>&1; then closed=$((closed + 1)); fi
+  done
   hr_ok herdr-desktop workspace-close "{\"closed\":$closed,\"label\":\"herdr.issue=$issue\"}"
 }
 
@@ -251,7 +282,7 @@ hr_git_worktree_remove() {
 
 hr_run() {
   local op="$1"; shift
-  local issue="" text="" args="" workspace="" base="" repo="" focus="" force=""
+  local issue="" text="" args="" workspace="" base="" repo="" focus="" force="" worktree_path=""
   while (($#)); do
     case "$1" in
       --issue) issue="$2"; shift 2 ;;
@@ -261,6 +292,7 @@ hr_run() {
       --base) base="$2"; shift 2 ;;
       --repo) repo="$2"; shift 2 ;;
       --focus) focus="$2"; shift 2 ;;
+      --worktree-path) worktree_path="$2"; shift 2 ;;
       --force) force=true; shift ;;
       *) hr_fail unknown "$op" INVALID_ARGS "unknown option $1"; return ;;
     esac
@@ -286,10 +318,23 @@ hr_run() {
       case "$runtime" in herdr-tui) hr_worktree_lookup_tui "$issue" ;; herdr-desktop|outside) hr_git_worktree_lookup "$issue" ;; esac ;;
     worktree-remove)
       [[ -n "$issue" ]] || { hr_fail "$runtime" "$op" INVALID_ARGS "--issue is required"; return; }
-      case "$runtime" in herdr-tui) hr_fail herdr-tui worktree-remove RUNTIME_UNSUPPORTED "close the Herdr workspace instead; use wt remove / git worktree remove directly" ;; herdr-desktop|outside) hr_git_worktree_remove "$issue" "${force:-false}" ;; esac ;;
+      case "$runtime" in
+        herdr-tui) hr_fail herdr-tui worktree-remove RUNTIME_UNSUPPORTED "close the Herdr workspace instead; use wt remove / git worktree remove directly" ;;
+        herdr-desktop|outside)
+          HR_LAST_WORKTREE_PATH=$(hr_git_worktree_path "$issue" 2>/dev/null || true)
+          export HR_LAST_WORKTREE_PATH
+          hr_git_worktree_remove "$issue" "${force:-false}" ;;
+      esac ;;
     workspace-close)
       [[ -n "$issue" ]] || { hr_fail "$runtime" "$op" INVALID_ARGS "--issue is required"; return; }
-      case "$runtime" in herdr-desktop) hr_workspace_close_desktop "$issue" ;; outside) hr_ok outside workspace-close '{"closed":0,"note":"outside host: nothing to close"}' ;; herdr-tui) hr_workspace_close_tui "$issue" ;; esac ;;
+      case "$runtime" in
+        herdr-desktop)
+          HR_LAST_WORKTREE_PATH="${worktree_path:-$(hr_git_worktree_path "$issue" 2>/dev/null || true)}"
+          export HR_LAST_WORKTREE_PATH
+          hr_workspace_close_desktop "$issue" ;;
+        outside) hr_ok outside workspace-close '{"closed":0,"note":"outside host: nothing to close"}' ;;
+        herdr-tui) hr_workspace_close_tui "$issue" ;;
+      esac ;;
     *) hr_fail "$runtime" "$op" INVALID_ARGS "unknown operation '$op'" ;;
   esac
 }

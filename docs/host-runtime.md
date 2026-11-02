@@ -65,7 +65,7 @@ template wins), falling back to plain git when wt fails.
 | `worktree-remove --issue K [--force]` | **refused** (`RUNTIME_UNSUPPORTED`) — close the Herdr workspace instead | `wt remove K` or `git worktree remove [+ --force]` + `git branch -D K` | same as desktop |
 | `agent-start --issue K --workspace W --args "..."` (TUI) / `--args "..."` (desktop) | `herdr agent start issue-<lowercased K> --kind pi --pane <pane-id> -- <args>`; pane resolved via `herdr pane list --workspace W` | `hc run --bg --keep --label herdr.issue=K -- <args>` | refused (`NO_HOST_AGENT`) |
 | `agent-prompt --issue K --text "..."` | `herdr agent prompt issue-<lowercased K> "<text>"` | `hc send <terminal> <text>`; terminal resolved via `hc ls --label herdr.issue=K` | refused (`NO_HOST_AGENT`) |
-| `workspace-close --issue K` | resolve workspace id (same lookup as `worktree-lookup`), then `herdr workspace close <id>` | `hc kill <terminal>` for the `herdr.issue=K`-labeled terminal | no-op success (`closed: 0`) |
+| `workspace-close --issue K [--worktree-path P]` | resolve workspace id (same lookup as `worktree-lookup`), then `herdr workspace close <id>` | `hc kill` every live terminal labeled `herdr.issue=K`, plus every live terminal whose cwd is `P` (or inside it) — desktop-app terminals carry no `herdr.issue` label, so `--worktree-path` (resolved at pre-flight, before the worktree is removed) is the reliable match | no-op success (`closed: 0`) |
 
 `<root>` is `$HR_WORKTREE_ROOT` (default `~/projects/worktrees`). `<repo>` is
 the leaf name of `--repo` when given, otherwise the parent of the git common
