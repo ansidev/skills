@@ -78,7 +78,7 @@ Before implementing:
 2. Use tool `kanpal_get_issue` to retrieve the issue details with the resolved issue key. If the issue is not found, return a message indicating that the issue does not exist.
 3. Self-assign if unassigned (MUST come before status transition): if the issue (from `kanpal_get_issue`) has no assignee, assign it to yourself with `kanpal_assign_issue` (`{"id":"<issue-id>","user_id":"<your-user-id>"}`). Resolve `<your-user-id>` by calling `kanpal_get_me` (no parameters), which returns the connected agent's record; use its `id` field (an agent's id is also its user id). NEVER ask the user who the assignee is. If the issue is already assigned (to anyone, including you), leave the assignee unchanged. If `kanpal_get_me` fails or the assignment is refused (archived agent, outside the project's team), report it to the user and continue without reassigning anyone else.
 4. If the issue status is `todo`, use tool `kanpal_update_issue` to change the status to `in-progress` and team to `agent`. The kanpal system requires the issue to be assigned (step 3) before this transition can succeed. Otherwise, if the issue status is `in-progress`, continue to the next step. If the issue status is done, return a message indicating that the issue has already been resolved.
-5. If the Herdr check `test "${HERDR_ENV:-}" = 1` passes AND the user asked to start the issue from inside Herdr AND the Worktree gate does NOT pass yet (i.e., you are not already the agent running inside the issue's worktree), run the Herdr automation workflow below. If the gate already passes, you ARE the spawned agent: skip the automation and continue with step 6.
+5. If the Worktree gate does NOT pass yet (i.e., you are NOT already the agent running inside the issue's worktree) AND the host-runtime adapter reports a managed host that supports agent launch (`herdr-tui` or `herdr-desktop`, not `outside` or `unknown`), run the Herdr automation workflow below. The runtime is determined by running `bash <skill-directory>/lib/host-runtime detect`; do NOT gate this on the `HERDR_ENV` environment variable — desktop hosts expose the adapter even when `HERDR_ENV` is unset. If the gate already passes, you ARE the spawned agent: skip the automation and continue with step 6. If the runtime is `outside` or `unknown`, do NOT attempt to launch a separate agent; proceed inline via the Worktree gate.
 6. Run the Worktree gate for issue branch `<issue-key>` (see above). This step MUST pass before any implementation step. All remaining steps run inside the worktree directory.
 7. Important: Apply the Skill selection policy above to pick the skills for this issue, then MUST use skill `spec-driven-development` (always-on) alongside them to create a solution for the issue.
 
@@ -101,7 +101,7 @@ Before implementing:
 
 10. When the implementation finishes, run the validation procedures required by the selected skills, then change the issue status to `in-review`; commit exactly the issue-relevant changes without pushing. First confirm with `git rev-parse --show-toplevel` that you are committing inside the issue worktree, not the main checkout.
 
-## Herdr automation workflow (only when `HERDR_ENV=1` and not already inside the issue worktree)
+## Managed host automation workflow (only when NOT already inside the issue worktree and a managed host is available)
 
 Use this workflow to bootstrap the implementation environment automatically, replacing the manual steps (create worktree workspace → start pi agent → send the prompt).
 
