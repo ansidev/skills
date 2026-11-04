@@ -1,9 +1,10 @@
 ---
-name: kp-issue-finish
 description: Use this skill to finish a kanpal issue after the user has manually reviewed and approved the implementation. When the user asks to finish, close out, land, or wrap up a kanpal issue, this skill will be activated.
 license: MIT
+metadata:
+    local-path: /Users/ansidev/projects/personal/agent-skills/skills/skills/kp-issue-finish
+name: kp-issue-finish
 ---
-
 # kp-issue-finish
 
 ## When to use

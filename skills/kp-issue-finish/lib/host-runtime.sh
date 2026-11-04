@@ -159,38 +159,7 @@ for i in d.get("items", []):
 
 hr_herdr_workspace_id_for_path() {
   local worktree_path="$1"
-  python3 -c '
-import json, sys
-
-path = sys.argv[1]
-raw = sys.stdin.read().strip()
-if not raw:
-    sys.exit(1)
-try:
-    payloads = [json.loads(raw)]
-except json.JSONDecodeError:
-    try:
-        payloads = [json.loads(line) for line in raw.splitlines() if line.strip()]
-    except json.JSONDecodeError:
-        sys.exit(1)
-
-def workspace_records(payload):
-    if isinstance(payload, list):
-        return payload
-    if isinstance(payload, dict):
-        return [payload]
-    return []
-
-for payload in payloads:
-    for workspace in workspace_records(payload):
-        if not isinstance(workspace, dict):
-            continue
-        workspace_id = workspace.get("workspace_id")
-        worktree = workspace.get("worktree")
-        if isinstance(workspace_id, str) and isinstance(worktree, dict) and worktree.get("checkout_path") == path:
-            print(workspace_id)
-            sys.exit(0)
-' "$worktree_path"
+  "$(dirname "${BASH_SOURCE[0]}")/workspace-id-for-path.sh" "$worktree_path"
 }
 
 hr_worktree_lookup_tui() {
@@ -410,6 +379,15 @@ hr_run() {
           hr_workspace_close_desktop "$issue" ;;
         outside) hr_ok outside workspace-close '{"closed":0,"note":"outside host: nothing to close"}' ;;
         herdr-tui) hr_workspace_close_tui "$issue" "$worktree_path" ;;
+      esac ;;
+    workspace-id)
+      [[ -n "$worktree_path" ]] || { hr_fail "$runtime" "$op" INVALID_ARGS "--worktree-path is required"; return; }
+      case "$runtime" in
+        herdr-tui)
+          workspaces=$(herdr workspace list 2>&1) || { hr_fail herdr-tui "$op" WORKSPACE_LIST_FAILED "herdr workspace list failed: $workspaces"; return; }
+          wid=$(printf '%s' "$workspaces" | "$(dirname "${BASH_SOURCE[0]}")/workspace-id-for-path.sh" "$worktree_path") || { hr_ok herdr-tui "$op" '{"workspace_id":null,"note":"no matching workspace"}'; return; }
+          hr_ok herdr-tui "$op" "{\"workspace_id\":\"$wid\"}" ;;
+        *) hr_ok "$runtime" "$op" '{"workspace_id":null,"note":"not applicable"}' ;;
       esac ;;
     *) hr_fail "$runtime" "$op" INVALID_ARGS "unknown operation '$op'" ;;
   esac
