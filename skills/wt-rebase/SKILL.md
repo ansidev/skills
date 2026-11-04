@@ -36,10 +36,13 @@ Report each item as done before finishing:
 - Do not push. Leave the result local.
 - If the working tree has uncommitted changes and no rebase is in progress, stop and ask the user (commit/stash first) rather than stashing silently.
 - Preserve the intent of both sides when resolving conflicts; never resolve by blindly taking one side unless the other side is clearly obsolete.
+- The base branch is read-only during this skill: never check it out, merge into it, cherry-pick onto it, or move its ref. The only operation performed is `git rebase <base_branch>`, which replays the current branch's commits on top of the base without changing the base ref.
 
 ## Workflow
 
 ### 1. Start (or continue) the rebase
+
+Important: this skill rebases the current branch onto the base branch only. It must not modify, advance, or commit anything to the base branch — the base ref is used solely as the upstream for the rebase.
 
 Detect whether a rebase is already in progress:
 
