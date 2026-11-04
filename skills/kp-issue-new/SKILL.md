@@ -40,7 +40,7 @@ This skill enables the creation of new issues in the Kanpal tracking system.
    1. **Create the issue** by using the `kanpal_create_issue` tool.
    2. **Set issue dependencies** by using the `kanpal_add_dependency` tool.
 9. **Confirm and Report**: Once the tool returns a successful response, extract the resulting issue ID and report it clearly to the user. Example response: "The issue X has been created."
-10. **Ask Before Implementation**: After reporting the issue ID, ask the user whether they want to start implementation. Do not start implementation automatically, and do not treat an unanswered or implicit response as confirmation.
+10. **Ask Before Implementation**: After reporting the issue ID, ask the user whether they want to start implementation using the `ask_user_question` tool. The question must offer options such as "Start implementation" to begin the work and "Not now" to leave the issue as created. Do not start implementation automatically, and do not treat an unanswered or implicit response as confirmation.
 11.  **Handle the Decision**:
  - If the user explicitly confirms, invoke skill `kp-issue-start <issue-key>` (the skill sets up the isolated worktree environment through the host-runtime adapter, so all implementation work happens in the worktree, never in the current working tree). Do not call host commands from this skill.
    - If the user declines, leave the issue in its created state and take no implementation action.
