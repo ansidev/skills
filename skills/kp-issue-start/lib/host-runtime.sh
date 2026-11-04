@@ -102,15 +102,34 @@ hr_wt_worktree_create() {
 }
 
 hr_worktree_create_tui() {
-  local issue="$1" base="$2" repo="${3:-}" focus="${4:-false}" path out workspace_id
+  local issue="$1" base="$2" repo="${3:-}" focus="${4:-false}" path out workspace_id root
+  root=$(hr_repo_root "") || root="$(pwd)"
   repo=$(hr_repo_name "$repo") || { hr_fail herdr-tui worktree-create WORKTREE_CREATE_FAILED "cannot resolve repo name; pass --repo"; return; }
   path="$(hr_worktree_root)/$repo/$issue"
   mkdir -p "$(hr_worktree_root)/$repo"
+  # 1. Create the git worktree + branch uniformly (same as herdr-desktop/outside).
+  local out
+  if command -v wt >/dev/null 2>&1; then
+    if ! out=$(cd "$root" && wt switch --create "$issue" --base "$base" 2>&1); then
+      hr_fail herdr-tui worktree-create WORKTREE_CREATE_FAILED "wt switch failed: $out"; return
+    fi
+    path=$(printf '%s\n' "$out" | sed -n 's/.*"path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
+    if [[ -z "$path" ]]; then
+      # wt succeeded but returned no JSON path (shell integration not installed); fall back to default layout.
+      path="$(hr_worktree_root)/$repo/$issue"
+    fi
+  else
+    if ! out=$(git -C "$root" worktree add "$path" -b "$issue" "$base" 2>&1); then
+      hr_fail herdr-tui worktree-create WORKTREE_CREATE_FAILED "git worktree add failed: $out"; return
+    fi
+  fi
+  # 2. Open/register a Herdr workspace at the worktree path (non-focusing).
   local focus_flags=()
   [[ "$focus" == false ]] && focus_flags=(--no-focus)
-  if ! out=$(herdr worktree create --branch "$issue" --label "$issue" --path "$path" "${focus_flags[@]}" 2>&1); then
-    hr_fail herdr-tui worktree-create WORKTREE_CREATE_FAILED "herdr worktree create failed: $out"; return
+  if ! out=$(herdr workspace create --cwd "$path" --label "$issue" "${focus_flags[@]}" 2>&1); then
+    hr_fail herdr-tui worktree-create WORKTREE_CREATE_FAILED "herdr workspace create failed: $out"; return
   fi
+  local workspace_id
   workspace_id=$(printf '%s\n' "$out" | sed -n 's/.*"workspace_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
   local ws_json
   if [[ -n "$workspace_id" ]]; then ws_json="\"$workspace_id\""; else ws_json=null; fi

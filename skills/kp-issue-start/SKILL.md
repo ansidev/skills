@@ -105,25 +105,18 @@ Before implementing:
 
 Use this workflow to bootstrap the implementation environment automatically, replacing the manual steps (create worktree workspace → start pi agent → send the prompt).
 
-1. Create the worktree workspace named by the issue ID, without stealing focus. For issue KP-3 in repo `skills` this is literally `--branch KP-3 --label KP-3` — never `--branch KP`. The adapter uses `wt switch --create` (worktrunk, honoring its path template) when `wt` is installed, `herdr worktree create` under herdr-tui, and plain `git worktree add` otherwise:
+1. Create the git worktree (uniformly via `git worktree add` / worktrunk). For herdr-tui, register a Herdr workspace at the worktree path without stealing focus; for other runtimes no workspace registration:
 
    ```bash
    bash <skill-directory>/lib/host-runtime worktree-create --issue <issue-key> --base <base-branch>
    ```
 
    Read the workspace ID and pane ID from the JSON result. On failure, report the error to the user and stop — do not start the agent, and do not implement the issue yourself.
-2. Start the pi coding agent in the worktree workspace's shell pane, running the same command you would run manually — `pi -a '/approval-mode act'` — expressed through herdr as:
+2. Start the pi coding agent in the worktree workspace's shell pane, launching it with approval mode (act) and the skill prompt in a single command — exactly as the user would run manually (e.g., issue `ASK-1`):
 
    ```bash
-   bash <skill-directory>/lib/host-runtime agent-start --issue <issue-key> --args "pi -a '/approval-mode act'"
+   bash <skill-directory>/lib/host-runtime agent-start --issue <issue-key> --args "pi -a '/approval-mode act' '/skill:kp-issue-start <issue-key>'"
    ```
 
    The pane ID comes from step 1. Choose a unique agent name matching `[a-z][a-z0-9_-]{0,31}`. On failure, report the error and leave the workspace for manual inspection.
-3. Deliver the issue prompt to the agent so it starts working in the new session:
-
-   ```bash
-   bash <skill-directory>/lib/host-runtime agent-prompt --issue <issue-key> --text "/skill:kp-issue-start <issue-key>"
-   ```
-
-   Optionally pass `--wait` to wait only until the agent settles after its first turn — never wait for the whole implementation.
-4. Report the created workspace ID, pane ID, and agent name back to the user, then return control to them. Do not focus the workspace; the user will interact with the agent as needed and run skill `kp-issue-finish <issue-key>` after reviewing the result.
+3. Report the created workspace ID, pane ID, and agent name back to the user, then return control to them. Do not focus the workspace; the user will interact with the agent as needed and run skill `kp-issue-finish <issue-key>` after reviewing the result.
