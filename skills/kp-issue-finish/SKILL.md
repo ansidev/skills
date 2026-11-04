@@ -37,11 +37,26 @@ Parsing rules:
 1. MUST use available tools from `kanpal` MCP.
 2. Respond to the user in English only, regardless of the language the user writes in.
 3. Follow the Cancel workflow when `--cancel` is given; otherwise follow the Merge workflow.
-4. Use the shared `skills/lib/host-runtime` adapter for host lifecycle operations. It detects `herdr-tui`, `herdr-desktop`, or `outside`; an `unknown` result is a stop condition and must never cause a fallback command path. Host cleanup is skipped only for `outside`; git worktree and branch cleanup remains mandatory.
+4. Use the shared `skills/lib/host-runtime` adapter for host lifecycle operations. It detects `herdr-tui`, `herdr-desktop`, or `outside`; an `unknown` result is a stop condition and must never cause a fallback command path. `outside` is an explicit N/A host-cleanup result; git worktree and branch cleanup remains mandatory.
 5. NEVER set the issue status to `done` (Merge workflow) or `cancelled` (Cancel workflow) outside this skill, and never set `done` until every prior step of this skill has succeeded.
 6. NEVER force-push, force-merge, force-remove a worktree (`git worktree remove --force`), force-delete a branch (`git branch -D`), or auto-abort a rebase unless user confirms or it is defined explicitly in the skill instructions. The only such exception is the Cancel workflow, which MUST clean up with forced removal (it force-removes the worktree and branch by design through the host adapter).
 7. MUST call tool `kanpal_get_issue` with parameter `{"key": "<issue-key>"}`.
 8. MUST call tool `kanpal_update_issue` with parameter `{"id":"<issue-id>"}`.
+9. A completion report MUST list evidence or an explicit N/A result for every checklist item. It MUST NOT describe an incomplete checklist as completion.
+
+## Closeout checklist
+
+Every closeout run verifies these items in order: issue status, committed/merged state (or explicit N/A for a terminal verification), Git worktree absence, issue branch absence, knowledge result, and runtime/host workspace absence. Runtime cleanup is the **final checklist item**. Each item needs fresh command or MCP evidence, not an assumption from a prior run. Any missing or failed evidence is reported as incomplete; do not make an unqualified completion report.
+
+## Terminal-status verification
+
+When `kanpal_get_issue` returns `done` or `cancelled`, do not return early and do not repeat a merge, rebase, status transition, or forced cancel cleanup. Instead, run the Closeout checklist as verification-only:
+
+1. Record the terminal issue status as verified.
+2. Resolve `<main-checkout>` and use `git -C <main-checkout> worktree list --porcelain` plus `git -C <main-checkout> branch --list <issue-key>` to verify whether the issue worktree and branch are absent. A present resource is incomplete, not an implicit success.
+3. Record commit/merge and knowledge as N/A unless their prior evidence is available in the issue activity; never fabricate it.
+4. Invoke `bash <skill-directory>/lib/host-runtime detect` and inspect its JSON envelope. If it is `unknown`, report the detection error as incomplete and stop. If it is `outside`, record runtime cleanup as N/A. Otherwise, call `workspace-close --issue <issue-key> --worktree-path <expected-worktree-path>` for only this issue, then call it again to verify their absence (`closed: 0`). The adapter must never be replaced with direct `herdr` or `hc` commands.
+5. Report every checklist item and its evidence. If any required verification is incomplete, state that plainly rather than reporting completion.
 
 ## Cancel workflow (`--cancel` given)
 
@@ -60,9 +75,10 @@ The skill may be started from ANY directory (main checkout, the worktree, or els
 
 1. Pre-flight:
    1. Confirm the plan with the user (once; when `AUTO_YES=true`, skip the confirmation, just state the plan and continue): rebase and fast-forward merge `<issue-key>` onto `<base-branch>`, then clean up its worktree, branch and Herdr workspace. NEVER rebase or merge onto a guessed base.
-   2. Resolve `<main-checkout>`: `git rev-parse --path-format=absolute --git-common-dir`, strip the trailing `/.git`. If the current directory is not inside a git repo, ask the user for the repo path. Then resolve `<worktree-path>`: `git -C <main-checkout> worktree list --porcelain`, the `worktree <path>` block whose `branch refs/heads/<issue-key>` matches. If none is found, stop and report (if the branch exists without a worktree, ask the user).
-   3. Call `kanpal_get_issue` with `{"key": "<issue-key>"}`. If not found, stop and say so. Read `id` (<issue-id>). If the status is already `done` or `cancelled`, stop and report.
-   4. If running under a managed host, resolve the host workspace ID of `<issue-key>` now (while the worktree still exists) with `bash <skill-directory>/lib/host-runtime worktree-lookup --issue <issue-key>` and remember it as `<workspace-id>` (empty if none). Also remember `<worktree-path>` from the envelope's `worktree_path`. The `lib/host-runtime` adapter is vendored inside this skill at `lib/`; if it is missing from the installed skill directory, do NOT improvise with `herdr`/`hc` commands directly — report the missing adapter and continue with the git-only steps.
+   2. Resolve `<main-checkout>`: `git rev-parse --path-format=absolute --git-common-dir`, strip the trailing `/.git`. If the current directory is not inside a git repo, ask the user for the repo path.
+   3. Call `kanpal_get_issue` with `{"key": "<issue-key>"}`. If not found, stop and say so. Read `id` (<issue-id>). If the status is already `done` or `cancelled`, run **Terminal-status verification** and stop; do not return an unqualified completion report.
+   4. Resolve `<worktree-path>`: `git -C <main-checkout> worktree list --porcelain`, the `worktree <path>` block whose `branch refs/heads/<issue-key>` matches. If none is found, stop and report (if the branch exists without a worktree, ask the user).
+   5. Invoke `bash <skill-directory>/lib/host-runtime detect` and inspect its normalized JSON envelope before any host lifecycle operation. If it is `unknown`, stop and report. If it is a managed runtime, resolve the host workspace ID of `<issue-key>` now with `bash <skill-directory>/lib/host-runtime worktree-lookup --issue <issue-key>` and remember it as `<workspace-id>` (empty if none). Also remember `<worktree-path>` from the envelope's `worktree_path`. The `lib/host-runtime` adapter is vendored inside this skill at `lib/`; if it is missing from the installed skill directory, do NOT improvise with `herdr`/`hc` commands directly — report the missing adapter and continue with the git-only steps.
 2. Commit:
    1. Run `git -C <worktree-path> status --porcelain`. If there are unstaged or untracked changes, ask the user how to handle them before continuing. Never use `git add -A` or `git commit -a`.
    2. If there are staged changes, commit only them (`git -C <worktree-path> commit`) with a Conventional Commit message whose scope is the issue key:
@@ -79,7 +95,7 @@ The skill may be started from ANY directory (main checkout, the worktree, or els
    3. If `wt-rebase` cannot complete (unresolvable conflict, failed check, or it asks the user), stop, show `git -C <worktree-path> status`, and report. Do not abort the rebase yourself. The issue status stays unchanged.
 4. Merge from the main checkout:
    1. All commands in this step use `git -C <main-checkout>`. Let `<local-base>` be `<base-branch>` without the remote prefix (`origin/develop` -> `develop`).
-   2. Verify `git -C <main-checkout> status --porcelain` is empty in the main checkout; otherwise stop and ask the user.
+   2. Inspect `git -C <main-checkout> status --porcelain` before checkout, fast-forward, merge, or cleanup. Classify every untracked path against the paths the next Git operation could write (the base branch update and `<issue-key>` diff). Continue when files are unrelated untracked paths and leave them untouched. Stop before mutation only when an untracked path would overwrite or conflict with a written path; name that path and explain the operation. Staged or modified tracked files remain a stop-and-ask condition.
    3. `git -C <main-checkout> checkout <local-base>`. If `<local-base>` is behind its remote counterpart, fast-forward it (`git -C <main-checkout> merge --ff-only <remote>/<local-base>`); if it cannot be fast-forwarded, stop and ask the user.
    4. `git -C <main-checkout> merge --ff-only <issue-key>`. If it fails, stop and report (do not create a merge commit).
    5. Verify: `git -C <main-checkout> merge-base --is-ancestor <issue-key> <local-base>` must succeed. If the merge was already done in a previous run, this check passes and you continue.
@@ -90,8 +106,6 @@ The skill may be started from ANY directory (main checkout, the worktree, or els
    4. Delete the branch with `git -C <main-checkout> branch -d <issue-key>` (never `-D`). If git refuses because it is not fully merged, stop and ask the user. If the branch does not exist, report it as already deleted and continue.
    5. Only touch the worktree and branch named `<issue-key>`.
 6. Add knowledge: use skill `add-knowledge` to record knowledge related to this issue in the OpenKnowledge base (via the `kb-okf` MCP). Prefer updating an existing document; create a new one only when appropriate. Issue notes live at the content-dir-relative path `projects/kanpal/<issue-key-lowercase>-<slug>` (on disk `knowledge/projects/kanpal/...`). NEVER write the path as `knowledge/projects/...` or `knowledge/knowledge/...`, and do not copy the location of an existing misplaced note. If this step fails, warn, continue, and mention it in the report.
-7. Close the issue: call `kanpal_update_issue` with `{"id": "<issue-id>", "status": "done"}`. Only do this if steps 1-5 all succeeded; otherwise stop without changing the status and report the failure.
-8. Host cleanup (last, because it may close the session you are running in). Only if a `<workspace-id>` was resolved in step 1.4, regardless of who created the workspace:
-   1. Print the step 9 report FIRST (as the final message content), then run `bash <skill-directory>/lib/host-runtime workspace-close --issue <issue-key> --worktree-path <worktree-path>` (pass `<worktree-path>` from step 1.2 even though the worktree was already removed in step 5 — the desktop adapter matches live terminals by their working directory, which outlives the removed worktree directory).
-   2. Never touch workspaces belonging to other issues.
-9. Report to the user what you have done as a checklist (commit, rebase, merge, worktree/branch cleanup, knowledge, status, Herdr cleanup, plus any skipped or warned steps).
+7. Runtime cleanup and final checklist item: run `bash <skill-directory>/lib/host-runtime workspace-close --issue <issue-key> --worktree-path <worktree-path>` for every managed runtime, regardless of who created the workspace. Then run it again to verify their absence (`closed: 0`). For `outside`, record runtime cleanup as N/A. A close failure or nonzero verification result is incomplete: report it and do not claim completion. Never touch workspaces belonging to other issues.
+8. Close the issue: call `kanpal_update_issue` with `{"id": "<issue-id>", "status": "done"}` only if the preceding checklist has evidence for every applicable item. Otherwise stop without changing the status and report the failure.
+9. Report every closeout checklist item (commit, rebase, merge, worktree/branch cleanup, knowledge, status, and runtime cleanup) with its evidence, N/A reason, or incomplete warning.

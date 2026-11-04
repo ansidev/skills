@@ -163,8 +163,22 @@ hr_worktree_lookup_desktop() { hr_git_worktree_lookup "$@"; }
 hr_worktree_lookup_outside() { hr_git_worktree_lookup "$@"; }
 
 hr_workspace_close_tui() {
-  local issue="$1" wid
-  wid=$(hr_run worktree-lookup --issue "$issue" 2>/dev/null | sed -n 's/.*"workspace_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+  local issue="$1" worktree_path="${2:-}" wid="" workspaces
+  if [[ -z "$worktree_path" ]]; then
+    worktree_path=$(hr_git_worktree_path "$issue" 2>/dev/null || true)
+  fi
+  if [[ -n "$worktree_path" ]]; then
+    workspaces=$(herdr workspace list 2>&1) || workspaces=""
+    while IFS= read -r line; do
+      local candidate_path candidate_id
+      candidate_id=$(printf '%s' "$line" | sed -n 's/.*"workspace_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+      candidate_path=$(printf '%s' "$line" | sed -n 's/.*"worktree_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+      if [[ "$candidate_path" == "$worktree_path" ]]; then
+        wid="$candidate_id"
+        break
+      fi
+    done <<< "$workspaces"
+  fi
   if [[ -z "$wid" ]]; then
     hr_ok herdr-tui workspace-close '{"closed":0,"note":"no Herdr workspace found for this issue"}'
     return
@@ -333,7 +347,7 @@ hr_run() {
           export HR_LAST_WORKTREE_PATH
           hr_workspace_close_desktop "$issue" ;;
         outside) hr_ok outside workspace-close '{"closed":0,"note":"outside host: nothing to close"}' ;;
-        herdr-tui) hr_workspace_close_tui "$issue" ;;
+        herdr-tui) hr_workspace_close_tui "$issue" "$worktree_path" ;;
       esac ;;
     *) hr_fail "$runtime" "$op" INVALID_ARGS "unknown operation '$op'" ;;
   esac

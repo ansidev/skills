@@ -157,6 +157,26 @@ exit 1''')
     # kp-issue-finish cleanup behavior
     # ------------------------------------------------------------------
 
+    def test_kp_issue_finish_requires_terminal_status_checklist_verification(self) -> None:
+        text = (SKILLS / "kp-issue-finish" / "SKILL.md").read_text()
+        self.assertIn("Terminal-status verification", text)
+        self.assertIn("done` or `cancelled`", text)
+        self.assertIn("every checklist item", text)
+        self.assertIn("unqualified completion", text)
+
+    def test_kp_issue_finish_requires_host_cleanup_absence_verification(self) -> None:
+        text = (SKILLS / "kp-issue-finish" / "SKILL.md").read_text()
+        self.assertIn("final checklist item", text)
+        self.assertIn("workspace-close", text)
+        self.assertIn("verify their absence", text)
+        self.assertIn("outside", text)
+
+    def test_kp_issue_finish_distinguishes_untracked_conflicts(self) -> None:
+        text = (SKILLS / "kp-issue-finish" / "SKILL.md").read_text()
+        self.assertIn("unrelated untracked", text)
+        self.assertIn("would overwrite", text)
+        self.assertIn("leave them untouched", text)
+
     def test_kp_issue_finish_workspace_close_outside_is_noop_success(self) -> None:
         repo = self.fixture_repo()
         _, closed = self.script_result(
