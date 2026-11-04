@@ -36,6 +36,25 @@ hr_detect_runtime() {
 
 hr_address() { sed -n 's/.*"address"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1; }
 
+hr_repo_root() {
+  local repo="${1:-}"
+  if [[ -n "$repo" && -d "$repo" ]]; then
+    # If someone passed a worktree, resolve back to the common/main checkout.
+    local common
+    common=$(git -C "$repo" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || common=""
+    if [[ -n "$common" ]]; then printf '%s\n' "${common%/.git}"; return 0; fi
+    printf '%s\n' "${repo%/}"
+    return 0
+  fi
+  if [[ -n "$repo" ]]; then
+    # A bare name: resolve from cwd's repo.
+    repo=""
+  fi
+  local common_dir
+  common_dir=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 1
+  printf '%s\n' "${common_dir%/.git}"
+}
+
 hr_repo_name() {
   local repo="${1:-}"
   if [[ -n "$repo" ]]; then
@@ -52,16 +71,17 @@ hr_repo_name() {
 hr_worktree_root() { printf '%s' "${HR_WORKTREE_ROOT:-${HOME}/projects/worktrees}"; }
 
 hr_git_worktree_create() {
-  local issue="$1" base="$2" repo out
-  repo=$(hr_repo_name "${3:-}") || { hr_fail "$HR_RUNTIME" worktree-create WORKTREE_CREATE_FAILED "cannot resolve repo name; pass --repo"; return; }
+  local issue="$1" base="$2" repo_arg="${3:-}" repo root out
+  root=$(hr_repo_root "$repo_arg") || { hr_fail "$HR_RUNTIME" worktree-create WORKTREE_CREATE_FAILED "cannot resolve repo root; pass --repo"; return; }
+  repo=$(hr_repo_name "$repo_arg")
+  [[ -n "$repo" ]] || repo=$(basename "$root")
   if command -v wt >/dev/null 2>&1; then
-    hr_wt_worktree_create "$issue" "$base"
-    return
+    ( cd "$root" && hr_wt_worktree_create "$issue" "$base" ) ; return
   fi
   local path
   path="$(hr_worktree_root)/$repo/$issue"
   mkdir -p "$(hr_worktree_root)/$repo"
-  if ! out=$(git worktree add "$path" -b "$issue" "$base" 2>&1); then
+  if ! out=$(git -C "$root" worktree add "$path" -b "$issue" "$base" 2>&1); then
     hr_fail "$HR_RUNTIME" worktree-create WORKTREE_CREATE_FAILED "git worktree add failed: $out"; return
   fi
   hr_ok "$HR_RUNTIME" worktree-create "{\"worktree_path\":\"$path\",\"branch\":\"$issue\",\"base\":\"$base\"}"
@@ -106,9 +126,10 @@ hr_worktree_create_outside() {
 }
 
 hr_git_worktree_lookup() {
-  local issue="$1" path
-  if command -v wt >/dev/null 2>&1; then
-    path=$(wt list --branches --format json 2>/dev/null | python3 -c '
+  local issue="$1" repo_arg="${2:-}" root path
+  root=$(hr_repo_root "$repo_arg" 2>/dev/null) || root=""
+  if command -v wt >/dev/null 2>&1 && [[ -n "$root" ]]; then
+    path=$( ( cd "$root" && wt list --branches --format json 2>/dev/null ) | python3 -c '
 import json, sys
 try:
     d = json.load(sys.stdin)
@@ -119,17 +140,26 @@ for i in d.get("items", []):
         print(i["worktree"]["path"])
 ' "$issue" 2>/dev/null)
   fi
-  [[ -n "$path" ]] || path=$(git worktree list --porcelain 2>/dev/null | awk -v I="refs/heads/$issue" '
-    /^worktree / { p=substr($0,10) }
-    /^branch / { if ($2==I) { print p; exit 0 } }
-  ')
+  if [[ -z "$path" ]]; then
+    if [[ -n "$root" ]]; then
+      path=$(git -C "$root" worktree list --porcelain 2>/dev/null | awk -v I="refs/heads/$issue" '
+        /^worktree / { p=substr($0,10) }
+        /^branch / { if ($2==I) { print p; exit 0 } }
+      ')
+    else
+      path=$(git worktree list --porcelain 2>/dev/null | awk -v I="refs/heads/$issue" '
+        /^worktree / { p=substr($0,10) }
+        /^branch / { if ($2==I) { print p; exit 0 } }
+      ')
+    fi
+  fi
   [[ -n "$path" ]] || { hr_fail "$HR_RUNTIME" worktree-lookup WORKTREE_NOT_FOUND "no worktree on branch $issue"; return; }
   hr_ok "$HR_RUNTIME" worktree-lookup "{\"worktree_path\":\"$path\",\"workspace_id\":null}"
 }
 
 hr_worktree_lookup_tui() {
-  local issue="$1" wt_path workspace_id=null workspaces
-  wt_path=$(hr_git_worktree_path_tui "$issue") || { hr_fail herdr-tui worktree-lookup WORKTREE_NOT_FOUND "no worktree on branch $issue"; return; }
+  local issue="$1" repo="${2:-}" wt_path workspace_id=null workspaces
+  wt_path=$(hr_git_worktree_path_tui "$issue" "$repo") || { hr_fail herdr-tui worktree-lookup WORKTREE_NOT_FOUND "no worktree on branch $issue"; return; }
   workspaces=$(herdr workspace list 2>&1) || workspaces=""
   if [[ -n "$workspaces" ]]; then
     while IFS= read -r line; do
@@ -143,7 +173,9 @@ hr_worktree_lookup_tui() {
 }
 
 hr_git_worktree_path() {
-  local issue="$1" path=""
+  local issue="$1" repo="${2:-}" root path=""
+  root=$(hr_repo_root "$repo" 2>/dev/null || true)
+  [ -z "$root" ] && root=""
   if command -v wt >/dev/null 2>&1; then
     hr_git_worktree_lookup "$issue" >/dev/null 2>&1 && path=$(hr_git_worktree_lookup "$issue" 2>/dev/null | sed -n 's/.*"worktree_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
   fi
@@ -270,7 +302,9 @@ hr_workspace_close_desktop() {
 # Worktree/branch cleanup: worktrunk when available (it reaps background
 # processes and deletes merged branches safely), plain git otherwise.
 hr_git_worktree_remove() {
-  local issue="$1" force="${2:-false}" path
+  local issue="$1" force="${2:-false}" repo="${3:-}" root path
+  root=$(hr_repo_root "$repo" 2>/dev/null || true)
+  path=""
   path=$(hr_git_worktree_lookup "$issue" 2>/dev/null | sed -n 's/.*"worktree_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
   if [[ -z "$path" ]]; then
     hr_ok "$HR_RUNTIME" worktree-remove "{\"removed\":0,\"note\":\"no worktree on branch $issue\"}"
@@ -287,8 +321,14 @@ hr_git_worktree_remove() {
   fi
   local git_flags=()
   [[ "$force" == true ]] && git_flags+=(--force)
-  if ! out=$(git worktree remove "${git_flags[@]}" "$path" 2>&1); then
-    hr_fail "$HR_RUNTIME" worktree-remove WORKTREE_REMOVE_FAILED "git worktree remove failed: $out"; return
+  if [[ -n "$root" ]]; then
+    if ! out=$(git -C "$root" worktree remove "${git_flags[@]}" "$path" 2>&1); then
+      hr_fail "$HR_RUNTIME" worktree-remove WORKTREE_REMOVE_FAILED "git worktree remove failed: $out"; return
+    fi
+  else
+    if ! out=$(git worktree remove "${git_flags[@]}" "$path" 2>&1); then
+      hr_fail "$HR_RUNTIME" worktree-remove WORKTREE_REMOVE_FAILED "git worktree remove failed: $out"; return
+    fi
   fi
   git branch -D "$issue" >/dev/null 2>&1
   hr_ok "$HR_RUNTIME" worktree-remove "{\"removed\":1,\"worktree_path\":\"$path\"}"
@@ -329,15 +369,15 @@ hr_run() {
       case "$runtime" in herdr-tui) hr_worktree_create_tui "$issue" "$base" "$repo" "${focus:-false}" ;; herdr-desktop|outside) hr_git_worktree_create "$issue" "$base" "$repo" ;; esac ;;
     worktree-lookup)
       [[ -n "$issue" ]] || { hr_fail "$runtime" "$op" INVALID_ARGS "--issue is required"; return; }
-      case "$runtime" in herdr-tui) hr_worktree_lookup_tui "$issue" ;; herdr-desktop|outside) hr_git_worktree_lookup "$issue" ;; esac ;;
+      case "$runtime" in herdr-tui) hr_worktree_lookup_tui "$issue" "$repo" ;; herdr-desktop|outside) hr_git_worktree_lookup "$issue" "$repo" ;; esac ;;
     worktree-remove)
       [[ -n "$issue" ]] || { hr_fail "$runtime" "$op" INVALID_ARGS "--issue is required"; return; }
       case "$runtime" in
         herdr-tui) hr_fail herdr-tui worktree-remove RUNTIME_UNSUPPORTED "close the Herdr workspace instead; use wt remove / git worktree remove directly" ;;
         herdr-desktop|outside)
-          HR_LAST_WORKTREE_PATH=$(hr_git_worktree_path "$issue" 2>/dev/null || true)
+          HR_LAST_WORKTREE_PATH=$(hr_git_worktree_path "$issue" "$repo" 2>/dev/null || true)
           export HR_LAST_WORKTREE_PATH
-          hr_git_worktree_remove "$issue" "${force:-false}" ;;
+          hr_git_worktree_remove "$issue" "${force:-false}" "$repo" ;;
       esac ;;
     workspace-close)
       [[ -n "$issue" ]] || { hr_fail "$runtime" "$op" INVALID_ARGS "--issue is required"; return; }
