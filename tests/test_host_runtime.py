@@ -227,8 +227,8 @@ class HostRuntimeContractTests(unittest.TestCase):
         self.stub(
             "herdr",
             f'''if test "$1 $2" = "workspace list"; then
-  printf \'{{"workspace_id":"w1","worktree_path":"/decoy/other"}}\\n\'
-  printf \'{{"workspace_id":"w2","worktree_path":"{wt_path}"}}\\n\'
+  printf \'{{"workspace_id":"w1","worktree":{{"checkout_path":"/decoy/other"}}}}\\n\'
+  printf \'{{"workspace_id":"w2","worktree":{{"checkout_path":"{wt_path}"}}}}\\n\'
   exit 0
 fi
 exit 1''',
@@ -248,8 +248,8 @@ exit 1''',
             "herdr",
             f'''printf '%s\\n' "$*" >> "{log}"
 if test "$1 $2" = "workspace list"; then
-  printf '{{"workspace_id":"other","worktree_path":"/unrelated"}}\\n'
-  printf '{{"workspace_id":"ask8","worktree_path":"{stale_path}"}}\\n'
+  printf '{{"workspace_id":"other","worktree":{{"checkout_path":"/unrelated"}}}}\\n'
+  printf '{{"workspace_id":"ask8","worktree":{{"checkout_path":"{stale_path}"}}}}\\n'
   exit 0
 fi
 if test "$1 $2 $3" = "workspace close ask8"; then exit 0; fi
@@ -263,6 +263,114 @@ exit 1''',
         self.assertEqual(closed["data"]["closed"], 1)
         self.assertEqual(closed["data"]["workspace_id"], "ask8")
         self.assertIn("workspace close ask8", log.read_text())
+
+    def test_tui_worktree_lookup_accepts_top_level_workspace_list(self) -> None:
+        repo = self.fixture_repo()
+        self.result(
+            "worktree-create", "--issue", "KP-7", "--base", "main",
+            "--repo", str(repo), cwd=str(repo),
+        )
+        wt_path = os.path.realpath(self.worktree_root / repo.name / "KP-7")
+        self.stub(
+            "herdr",
+            f'''if test "$1 $2" = "workspace list"; then
+  printf '[{{"workspace_id":"w2","worktree":{{"checkout_path":"{wt_path}"}}}}]\\n'
+  exit 0
+fi
+exit 1''',
+        )
+        _, lookup = self.result(
+            "worktree-lookup", "--issue", "KP-7", "--repo", str(repo),
+            env=self.base_env | {"HERDR_ENV": "1"}, cwd=str(repo),
+        )
+        self.assertTrue(lookup["ok"])
+        self.assertEqual(lookup["data"]["workspace_id"], "w2")
+
+    def test_tui_workspace_close_does_not_match_embedded_metadata(self) -> None:
+        repo = self.fixture_repo()
+        stale_path = self.worktree_root / repo.name / "ASK-10"
+        log = Path(self.temp.name) / "herdr.log"
+        self.stub(
+            "herdr",
+            f'''printf '%s\\n' "$*" >> "{log}"
+if test "$1 $2" = "workspace list"; then
+  printf '{{"metadata":{{"workspace_id":"embedded","worktree":{{"checkout_path":"{stale_path}"}}}},"workspaces":[]}}\\n'
+  exit 0
+fi
+exit 1''',
+        )
+        completed, closed = self.result(
+            "workspace-close", "--issue", "ASK-10", "--worktree-path", str(stale_path),
+            env=self.base_env | {"HERDR_ENV": "1"}, cwd=str(repo),
+        )
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(closed["data"]["closed"], 0)
+        self.assertNotIn("workspace close", log.read_text())
+
+    def test_tui_workspace_close_returns_absent_for_valid_nonmatching_list(self) -> None:
+        repo = self.fixture_repo()
+        stale_path = self.worktree_root / repo.name / "ASK-10"
+        log = Path(self.temp.name) / "herdr.log"
+        self.stub(
+            "herdr",
+            f'''printf '%s\\n' "$*" >> "{log}"
+if test "$1 $2" = "workspace list"; then
+  printf '[{{"workspace_id":"other","worktree":{{"checkout_path":"/unrelated"}}}}]\\n'
+  exit 0
+fi
+exit 1''',
+        )
+        completed, closed = self.result(
+            "workspace-close", "--issue", "ASK-10", "--worktree-path", str(stale_path),
+            env=self.base_env | {"HERDR_ENV": "1"}, cwd=str(repo),
+        )
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(closed["data"]["closed"], 0)
+        self.assertNotIn("workspace close", log.read_text())
+
+    def test_tui_worktree_lookup_list_failure_is_not_reported_as_absent(self) -> None:
+        repo = self.fixture_repo()
+        self.result(
+            "worktree-create", "--issue", "KP-7", "--base", "main",
+            "--repo", str(repo), cwd=str(repo),
+        )
+        self.stub(
+            "herdr",
+            '''if test "$1 $2" = "workspace list"; then
+  printf 'Herdr unavailable\\n' >&2
+  exit 7
+fi
+exit 1''',
+        )
+        completed, result = self.result(
+            "worktree-lookup", "--issue", "KP-7", "--repo", str(repo),
+            env=self.base_env | {"HERDR_ENV": "1"}, cwd=str(repo),
+        )
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"]["code"], "WORKSPACE_LIST_FAILED")
+
+    def test_tui_workspace_list_failure_is_not_reported_as_absent(self) -> None:
+        repo = self.fixture_repo()
+        stale_path = self.worktree_root / repo.name / "ASK-10"
+        log = Path(self.temp.name) / "herdr.log"
+        self.stub(
+            "herdr",
+            f'''printf '%s\\n' "$*" >> "{log}"
+if test "$1 $2" = "workspace list"; then
+  printf 'Herdr unavailable\\n' >&2
+  exit 7
+fi
+exit 1''',
+        )
+        completed, result = self.result(
+            "workspace-close", "--issue", "ASK-10", "--worktree-path", str(stale_path),
+            env=self.base_env | {"HERDR_ENV": "1"}, cwd=str(repo),
+        )
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertFalse(result["ok"])
+        self.assertNotEqual(result["error"]["code"], "WORKSPACE_NOT_FOUND")
+        self.assertNotIn("workspace close", log.read_text())
 
     def test_tui_worktree_remove_is_refused(self) -> None:
         self.stub("herdr", 'exit 0')

@@ -195,8 +195,8 @@ exit 1''')
         log = Path(self.temp.name) / "herdr.log"
         self.stub("herdr", f'''printf '%s\\n' "$*" >> "{log}"
 if test "$1 $2" = "workspace list"; then
-  printf '{{"workspace_id":"w1","worktree_path":"/decoy/other"}}\\n'
-  printf '{{"workspace_id":"w2","worktree_path":"{wt_path}"}}\\n'
+  printf '{{"workspace_id":"w1","worktree":{{"checkout_path":"/decoy/other"}}}}\\n'
+  printf '{{"workspace_id":"w2","worktree":{{"checkout_path":"{wt_path}"}}}}\\n'
   exit 0
 fi
 if test "$1 $2 $3" = "workspace close w2"; then exit 0; fi

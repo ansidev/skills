@@ -157,18 +157,48 @@ for i in d.get("items", []):
   hr_ok "$HR_RUNTIME" worktree-lookup "{\"worktree_path\":\"$path\",\"workspace_id\":null}"
 }
 
+hr_herdr_workspace_id_for_path() {
+  local worktree_path="$1"
+  python3 -c '
+import json, sys
+
+path = sys.argv[1]
+raw = sys.stdin.read().strip()
+if not raw:
+    sys.exit(1)
+try:
+    payloads = [json.loads(raw)]
+except json.JSONDecodeError:
+    try:
+        payloads = [json.loads(line) for line in raw.splitlines() if line.strip()]
+    except json.JSONDecodeError:
+        sys.exit(1)
+
+def workspace_records(payload):
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        return [payload]
+    return []
+
+for payload in payloads:
+    for workspace in workspace_records(payload):
+        if not isinstance(workspace, dict):
+            continue
+        workspace_id = workspace.get("workspace_id")
+        worktree = workspace.get("worktree")
+        if isinstance(workspace_id, str) and isinstance(worktree, dict) and worktree.get("checkout_path") == path:
+            print(workspace_id)
+            sys.exit(0)
+' "$worktree_path"
+}
+
 hr_worktree_lookup_tui() {
-  local issue="$1" repo="${2:-}" wt_path workspace_id=null workspaces
+  local issue="$1" repo="${2:-}" wt_path workspace_id=null workspaces wid
   wt_path=$(hr_git_worktree_path_tui "$issue" "$repo") || { hr_fail herdr-tui worktree-lookup WORKTREE_NOT_FOUND "no worktree on branch $issue"; return; }
-  workspaces=$(herdr workspace list 2>&1) || workspaces=""
-  if [[ -n "$workspaces" ]]; then
-    while IFS= read -r line; do
-      local wid wpath
-      wid=$(printf '%s' "$line" | sed -n 's/.*"workspace_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-      wpath=$(printf '%s' "$line" | sed -n 's/.*"worktree_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-      if [[ -n "$wid" && "$wpath" == "$wt_path" ]]; then workspace_id="\"$wid\""; break; fi
-    done <<< "$workspaces"
-  fi
+  workspaces=$(herdr workspace list 2>&1) || { hr_fail herdr-tui worktree-lookup WORKSPACE_LIST_FAILED "herdr workspace list failed: $workspaces"; return; }
+  wid=$(printf '%s' "$workspaces" | hr_herdr_workspace_id_for_path "$wt_path") || { hr_fail herdr-tui worktree-lookup WORKSPACE_LIST_PARSE_FAILED "could not parse herdr workspace list output"; return; }
+  [[ -n "$wid" ]] && workspace_id="\"$wid\""
   hr_ok herdr-tui worktree-lookup "{\"worktree_path\":\"$wt_path\",\"workspace_id\":$workspace_id}"
 }
 
@@ -200,16 +230,8 @@ hr_workspace_close_tui() {
     worktree_path=$(hr_git_worktree_path "$issue" 2>/dev/null || true)
   fi
   if [[ -n "$worktree_path" ]]; then
-    workspaces=$(herdr workspace list 2>&1) || workspaces=""
-    while IFS= read -r line; do
-      local candidate_path candidate_id
-      candidate_id=$(printf '%s' "$line" | sed -n 's/.*"workspace_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-      candidate_path=$(printf '%s' "$line" | sed -n 's/.*"worktree_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-      if [[ "$candidate_path" == "$worktree_path" ]]; then
-        wid="$candidate_id"
-        break
-      fi
-    done <<< "$workspaces"
+    workspaces=$(herdr workspace list 2>&1) || { hr_fail herdr-tui workspace-close WORKSPACE_LIST_FAILED "herdr workspace list failed: $workspaces"; return; }
+    wid=$(printf '%s' "$workspaces" | hr_herdr_workspace_id_for_path "$worktree_path") || { hr_fail herdr-tui workspace-close WORKSPACE_LIST_PARSE_FAILED "could not parse herdr workspace list output"; return; }
   fi
   if [[ -z "$wid" ]]; then
     hr_ok herdr-tui workspace-close '{"closed":0,"note":"no Herdr workspace found for this issue"}'
